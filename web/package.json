@@ -1,0 +1,44 @@
+{
+  "name": "lab-schedule",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "node --test --experimental-strip-types src/lib/*.test.ts",
+    "test:integration": "node --experimental-test-module-mocks --import tsx --conditions react-server --test --test-concurrency=1 test/*.test.mts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node scripts/seed-initial-data.mjs",
+    "db:seed:li-yuhui": "node scripts/seed-member-li-yuhui.mjs",
+    "db:seed:test-members": "node scripts/seed-test-members.mjs",
+    "db:cleanup:test-members": "node scripts/cleanup-test-members.mjs",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "better-auth": "latest",
+    "date-fns": "latest",
+    "drizzle-orm": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "postgres": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "drizzle-kit": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "server-only": "^0.0.1",
+    "tailwindcss": "latest",
+    "tsx": "^4.23.15",
+    "typescript": "latest"
+  }
+}

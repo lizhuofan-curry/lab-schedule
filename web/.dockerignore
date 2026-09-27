@@ -1,0 +1,7 @@
+node_modules
+.next
+.next-production-check
+.env
+.env.local
+npm-debug.log*
+*.png
