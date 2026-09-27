@@ -10,8 +10,8 @@ process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/sch
 
 const { db, sqlClient } = await import("@/db");
 const { migrate } = await import("drizzle-orm/postgres-js/migrator");
-const { eq } = await import("drizzle-orm");
-const { courses, courseSnapshots, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
+const { and, eq } = await import("drizzle-orm");
+const { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
@@ -114,4 +114,25 @@ test("批量导入只替换当前成员课表，并创建完整历史快照", as
   assert.equal(versions.length, 1);
   assert.equal(snapshots.length, 1);
   assert.equal(snapshots[0].location, "A101");
+});
+
+test("河大确认导入复用本人整表事务，并且审计中不包含密码", async () => {
+  const imported = [courseInputSchema.parse({ semesterId, name: "河大同步课程", location: "综合楼101", weekday: 4, startPeriod: 1, endPeriod: 2, weeks: [1, 3, 5] })];
+  const version = await confirmScheduleImport({
+    member: { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" },
+    source: "henu",
+    fileName: "河大教务系统",
+    imported,
+  });
+  assert.equal(version.versionNo, 2);
+  const [storedVersion] = await db.select().from(scheduleVersions).where(eq(scheduleVersions.id, version.id));
+  const logs = await db.select().from(auditLogs).where(and(
+    eq(auditLogs.entityType, "schedule_version"),
+    eq(auditLogs.entityId, String(version.id)),
+  ));
+  const otherCourses = await db.select().from(courses).where(eq(courses.studentId, studentB));
+  assert.equal(storedVersion.source, "henu");
+  assert.equal(otherCourses.some((course) => course.name === "乙的课"), true);
+  assert.equal(logs.length, 1);
+  assert.equal(JSON.stringify(logs).toLowerCase().includes("password"), false);
 });

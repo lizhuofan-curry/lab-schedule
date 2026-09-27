@@ -23,13 +23,26 @@ mock.module("@/lib/schedule-import-service", {
   },
 });
 
+mock.module("@/lib/henu-sync-service", {
+  namedExports: {
+    HenuSyncError: class HenuSyncError extends Error {},
+    previewHenuSchedule: async () => { throw new Error("不应执行"); },
+  },
+});
+
 const { GET } = await import("@/app/api/students/[id]/schedule/route");
 const importPreviewRoute = await import("@/app/api/my/schedule-import/preview/route");
 const importConfirmRoute = await import("@/app/api/my/schedule-import/confirm/route");
+const henuSyncRoute = await import("@/app/api/my/henu-sync/route");
 
 test("未登录不能查看成员课表（返回 401）", async () => {
   const request = new Request("http://localhost/api/students/1/schedule?semester=1&week=1");
   const response = await GET(request, { params: Promise.resolve({ id: "1" }) });
+  assert.equal(response.status, 401);
+});
+
+test("未登录不能读取河大课表", async () => {
+  const response = await henuSyncRoute.POST(new Request("http://localhost/api/my/henu-sync", { method: "POST" }));
   assert.equal(response.status, 401);
 });
 

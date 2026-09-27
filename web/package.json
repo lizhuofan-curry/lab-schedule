@@ -19,9 +19,11 @@
   },
   "dependencies": {
     "better-auth": "latest",
+    "cheerio": "^1.2.0",
     "date-fns": "latest",
     "drizzle-orm": "latest",
     "exceljs": "^4.4.0",
+    "iconv-lite": "^0.7.3",
     "lucide-react": "latest",
     "next": "latest",
     "postgres": "latest",
@@ -31,6 +33,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "latest",
+    "@types/cheerio": "^0.22.35",
+    "@types/iconv-lite": "^0.0.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

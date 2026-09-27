@@ -20,7 +20,7 @@ export default async function MySchedulePage() {
           <EmptyState title="学期尚未初始化" text="请稍后刷新；服务器需要先写入本学期与上课时间。" />
         </>
       ) : (
-        <MyScheduleEditor semester={schedule.semester} periods={schedule.periods} initialCourses={schedule.courses} />
+        <MyScheduleEditor semester={schedule.semester} periods={schedule.periods} initialCourses={schedule.courses} studentNo={member.studentNo} />
       )}
     </AppShell>
   );

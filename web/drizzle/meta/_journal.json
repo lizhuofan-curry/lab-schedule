@@ -29,6 +29,13 @@
       "when": 1790514904886,
       "tag": "0003_clear_lilith",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790527513990,
+      "tag": "0004_luxuriant_rattler",
+      "breakpoints": true
     }
   ]
 }

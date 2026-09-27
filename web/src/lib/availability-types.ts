@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, getISODay, isValid, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, format, getISODay, isValid, parseISO } from "date-fns";
 import type { ScheduleSemester } from "@/lib/schedule-types";
 
 export type OccupiedCourse = {
@@ -30,6 +30,12 @@ export function resolveTeachingDate(date: string, semester: ScheduleSemester) {
   const week = Math.floor(differenceInCalendarDays(parsed, parseISO(semester.startDate)) / 7) + 1;
   if (week < 1 || week > semester.weekCount) return null;
   return { week, weekday: getISODay(parsed) };
+}
+
+export function resolveDateForWeek(week: number, weekday: number, semester: ScheduleSemester) {
+  const start = parseISO(semester.startDate);
+  const offset = (weekday - getISODay(start)) + (week - 1) * 7;
+  return format(addDays(start, offset), "yyyy-MM-dd");
 }
 
 export function contiguousRanges(periods: number[], minimum: number): AvailabilityRange[] {

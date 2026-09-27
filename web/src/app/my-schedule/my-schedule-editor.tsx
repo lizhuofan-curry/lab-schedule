@@ -1,7 +1,7 @@
 "use client";
 
 import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
-import { Plus, Upload } from "lucide-react";
+import { Plus, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { PageHeader } from "@/components/app-shell";
@@ -10,6 +10,7 @@ import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { CourseInput } from "@/lib/course-schema";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
+import { HenuSyncPanel } from "./henu-sync-panel";
 
 function getCurrentWeek(startDate: string, weekCount: number) {
   const elapsedDays = differenceInCalendarDays(startOfDay(new Date()), parseISO(startDate));
@@ -20,7 +21,7 @@ function normalizeCourse(value: ScheduleCourse): ScheduleCourse {
   return { ...value, weeks: value.weeks.map(Number) };
 }
 
-export function MyScheduleEditor({ semester, periods, initialCourses }: { semester: ScheduleSemester; periods: SchedulePeriod[]; initialCourses: ScheduleCourse[] }) {
+export function MyScheduleEditor({ semester, periods, initialCourses, studentNo }: { semester: ScheduleSemester; periods: SchedulePeriod[]; initialCourses: ScheduleCourse[]; studentNo: string }) {
   const [week, setWeek] = useState(() => getCurrentWeek(semester.startDate, semester.weekCount));
   const [courseItems, setCourseItems] = useState(initialCourses);
   const [editing, setEditing] = useState<ScheduleCourse | null>(null);
@@ -29,6 +30,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses }: { semest
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showHenuSync, setShowHenuSync] = useState(false);
 
   function openNew(weekday = 1, period = 1) {
     setEditing(null);
@@ -97,8 +99,9 @@ export function MyScheduleEditor({ semester, periods, initialCourses }: { semest
 
   return (
     <>
-      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<div className="header-action-group"><Link className="button secondary" href="/my-schedule/import"><Upload size={17} /> 批量导入</Link><button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button></div>} />
+      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<div className="header-action-group"><button className="button secondary" onClick={() => { setShowHenuSync((value) => !value); setError(""); }}><RefreshCw size={17} /> 河大同步</button><Link className="button secondary" href="/my-schedule/import"><Upload size={17} /> 批量导入</Link><button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button></div>} />
       {notice && <div className="toast" role="status">✓ {notice}</div>}
+      {showHenuSync && <HenuSyncPanel defaultStudentId={studentNo} />}
       <section className="panel timetable-panel">
         <div className="table-toolbar">
           <WeekSwitcher semesterName={semester.name} week={week} weekCount={semester.weekCount} onChange={setWeek} />

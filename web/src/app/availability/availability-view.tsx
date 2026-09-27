@@ -1,5 +1,6 @@
 "use client";
 
+import { differenceInCalendarDays, getISODay, parseISO } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, Clock3, Search, Users } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
@@ -42,9 +43,8 @@ function formatDate(date: string) {
   return `${month}月${day}日`;
 }
 
-export function AvailabilityView({ members, defaultDate, semester, currentUser }: {
+export function AvailabilityView({ members, semester, currentUser }: {
   members: ScheduleMember[];
-  defaultDate: string;
   semester: ScheduleSemester;
   currentUser: { name: string; studentNo: string };
 }) {
@@ -52,14 +52,12 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
   const [grade, setGrade] = useState<GradeFilter>("all");
   const [personId, setPersonId] = useState<number | null>(members[0]?.id ?? null);
   const [selected, setSelected] = useState<number[]>(members.map((member) => member.id));
-  const [date, setDate] = useState(defaultDate);
-  const [dateTo, setDateTo] = useState(defaultDate);
-  const [minimumPeriods, setMinimumPeriods] = useState(1);
+  const [weekday, setWeekday] = useState(() => getISODay(new Date()));
+  const [week, setWeek] = useState(() => Math.max(1, Math.min(semester.weekCount, Math.floor(differenceInCalendarDays(new Date(), parseISO(semester.startDate)) / 7) + 1)));
   const [minimumMinutes, setMinimumMinutes] = useState(45);
-  const [weekday, setWeekday] = useState(0);
   const [allDay, setAllDay] = useState(false);
-  const [startPeriod, setStartPeriod] = useState(1);
-  const [endPeriod, setEndPeriod] = useState(2);
+  const [startTime, setStartTime] = useState("14:00");
+  const [endTime, setEndTime] = useState("15:30");
   const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(members.length > 0);
@@ -82,13 +80,11 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        date,
-        dateTo,
+        weekday,
+        week,
         studentIds: queryIds,
-        minimumConsecutivePeriods: mode === "time" ? 1 : minimumPeriods,
         minimumMinutes: mode === "time" ? 0 : minimumMinutes,
-        ...(weekday ? { weekdays: [weekday] } : {}),
-        ...(mode === "time" ? { startPeriod: allDay ? 1 : startPeriod, endPeriod: allDay ? 13 : endPeriod } : {}),
+        ...(mode === "time" && !allDay ? { startTime, endTime } : {}),
       }),
       signal: controller.signal,
     }).then(async (response) => {
@@ -104,19 +100,12 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [allDay, date, dateTo, endPeriod, minimumMinutes, minimumPeriods, mode, queryIds, startPeriod, weekday]);
+  }, [allDay, endTime, minimumMinutes, mode, queryIds, startTime, week, weekday]);
 
   function toggleMember(id: number) {
     setLoading(true);
     setError("");
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  }
-
-  function updateStartDate(value: string) {
-    setLoading(true);
-    setError("");
-    setDate(value);
-    if (dateTo < value) setDateTo(value);
   }
 
   const selectedPerson = personId ? memberById.get(personId) : null;
@@ -150,16 +139,12 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
         {mode === "time" && <div className="filter-note"><Users size={18} /><span>将在当前筛选的 <strong>{visibleMembers.length}</strong> 位成员中查找。</span></div>}
 
         <div className="filter-fields availability-fields">
-          <label className="field"><span>开始日期</span><input type="date" min={semester.startDate} max={semester.endDate} value={date} onChange={(event) => updateStartDate(event.target.value)} /></label>
-          <label className="field"><span>结束日期</span><input type="date" min={date} max={semester.endDate} value={dateTo} onChange={(event) => { setDateTo(event.target.value); setLoading(true); setError(""); }} /></label>
-          <label className="field"><span>星期筛选</span><select value={weekday} onChange={(event) => { setWeekday(Number(event.target.value)); setLoading(true); setError(""); }}><option value={0}>全部星期</option>{weekdays.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select></label>
-          {mode !== "time" && <>
-            <label className="field"><span>至少连续</span><select value={minimumPeriods} onChange={(event) => { setMinimumPeriods(Number(event.target.value)); setLoading(true); setError(""); }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value} 节</option>)}</select></label>
-            <label className="field"><span>至少空闲</span><select value={minimumMinutes} onChange={(event) => { setMinimumMinutes(Number(event.target.value)); setLoading(true); setError(""); }}>{[45, 90, 135, 180].map((value) => <option key={value} value={value}>{value} 分钟</option>)}</select></label>
-          </>}
+          <label className="field"><span>星期</span><select value={weekday} onChange={(event) => { setWeekday(Number(event.target.value)); setLoading(true); setError(""); }}>{weekdays.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select></label>
+          <label className="field"><span>周次</span><select value={week} onChange={(event) => { setWeek(Number(event.target.value)); setLoading(true); setError(""); }}>{Array.from({ length: semester.weekCount }, (_, index) => index + 1).map((value) => <option key={value} value={value}>第 {value} 周</option>)}</select></label>
+          {mode !== "time" && <label className="field"><span>至少空闲</span><select value={minimumMinutes} onChange={(event) => { setMinimumMinutes(Number(event.target.value)); setLoading(true); setError(""); }}>{[45, 90, 135, 180].map((value) => <option key={value} value={value}>{value} 分钟</option>)}</select></label>}
           {mode === "time" && <>
-            <label className="field"><span>开始节次</span><select disabled={allDay} value={startPeriod} onChange={(event) => { const value = Number(event.target.value); setStartPeriod(value); if (endPeriod < value) setEndPeriod(value); setLoading(true); setError(""); }}>{Array.from({ length: 13 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>第 {value} 节</option>)}</select></label>
-            <label className="field"><span>结束节次</span><select disabled={allDay} value={endPeriod} onChange={(event) => { setEndPeriod(Number(event.target.value)); setLoading(true); setError(""); }}>{Array.from({ length: 13 - startPeriod + 1 }, (_, index) => startPeriod + index).map((value) => <option key={value} value={value}>第 {value} 节</option>)}</select></label>
+            <label className="field"><span>开始时间</span><input type="time" disabled={allDay} value={startTime} onChange={(event) => { setStartTime(event.target.value); setLoading(true); setError(""); }} /></label>
+            <label className="field"><span>结束时间</span><input type="time" disabled={allDay} value={endTime} onChange={(event) => { setEndTime(event.target.value); setLoading(true); setError(""); }} /></label>
             <label className="field full availability-check"><input type="checkbox" checked={allDay} onChange={(event) => { setAllDay(event.target.checked); setLoading(true); setError(""); }} /><span>只查当天 13 节课全部无课的成员</span></label>
           </>}
         </div>
@@ -170,7 +155,7 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
         {queryIds.length > 0 && loading && <div className="empty-result"><Clock3 size={28} /><strong>正在读取课表…</strong><p>查询范围较大时可能需要稍等片刻。</p></div>}
         {queryIds.length > 0 && !loading && error && <div className="form-error" role="alert">{error}</div>}
         {queryIds.length > 0 && !loading && result && <>
-          <div className="result-summary"><span className="result-icon"><CalendarDays size={24} /></span><div><span className="eyebrow">{formatDate(date)} 至 {formatDate(dateTo)}</span><h2>{mode === "time" ? `找到 ${freeWindowCount} 人次空闲` : `找到 ${result.days.reduce((total, day) => total + day.ranges.length, 0)} 个可用时段`}</h2><p>{mode === "person" ? `正在查看 ${selectedPerson?.name ?? "所选成员"} 的空闲时间。` : mode === "time" ? (allDay ? "要求当天第 1–13 节全部无课。" : `要求第 ${startPeriod}–${endPeriod} 节全程无课。`) : `${queryIds.length} 位成员必须同时空闲。`}</p></div></div>
+          <div className="result-summary"><span className="result-icon"><CalendarDays size={24} /></span><div><span className="eyebrow">{weekdays[weekday - 1]} · 第 {week} 周</span><h2>{mode === "time" ? `找到 ${freeWindowCount} 人次空闲` : `找到 ${result.days.reduce((total, day) => total + day.ranges.length, 0)} 个可用时段`}</h2><p>{mode === "person" ? `正在查看 ${selectedPerson?.name ?? "所选成员"} 的空闲时间。` : mode === "time" ? (allDay ? "要求当天全部节次无课。" : `要求 ${startTime}–${endTime} 全程空闲。`) : `${queryIds.length} 位成员必须同时空闲。`}</p></div></div>
 
           <div className="availability-day-list">{result.days.map((day) => {
             const freeMembers = day.freeStudentIdsForWindow.map((id) => memberById.get(id)).filter(Boolean);

@@ -3,7 +3,7 @@ import { confirmScheduleImport, ScheduleImportError } from "@/lib/schedule-impor
 import { getCurrentMember, unauthorized } from "@/lib/server-auth";
 
 const confirmSchema = z.object({
-  source: z.enum(["csv", "xlsx"]),
+  source: z.enum(["csv", "xlsx", "henu"]),
   fileName: z.string().trim().min(1).max(255),
   courses: z.array(z.unknown()).min(1).max(200),
 });

@@ -4,13 +4,15 @@ import ExcelJS from "exceljs";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semesters, students } from "@/db/schema";
-import { courseInputSchema } from "@/lib/course-schema";
+import { courseInputSchema, type CourseInput } from "@/lib/course-schema";
 import { coursesConflict, coursesDuplicate } from "@/lib/course-rules";
 import { importHeaders, parseCsv, recordsFromRows, summarizeImportDiff, validateImportRecords, type ImportRecord } from "@/lib/schedule-import";
 import type { CurrentMember } from "@/lib/server-auth";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 200;
+
+export type ScheduleImportSource = "csv" | "xlsx" | "henu";
 
 export class ScheduleImportError extends Error {
   constructor(public code: "FILE_INVALID" | "IMPORT_INVALID" | "SEMESTER_NOT_FOUND", message: string) { super(message); }
@@ -94,29 +96,71 @@ export async function previewScheduleImport(file: File, member: CurrentMember) {
   };
 }
 
-function validateConfirmedCourses(input: unknown[], semesterId: number, weekCount: number, periodNos: number[]) {
-  if (input.length === 0 || input.length > MAX_IMPORT_ROWS) throw new ScheduleImportError("IMPORT_INVALID", `请导入 1-${MAX_IMPORT_ROWS} 门课程。`);
-  const parsed = input.map((course, index) => {
+function validateCourseCandidates(input: unknown[], semesterId: number, weekCount: number, periodNos: number[]) {
+  const rows = input.map((course, index) => {
+    const errors: string[] = [];
     const result = courseInputSchema.safeParse(course);
-    if (!result.success) throw new ScheduleImportError("IMPORT_INVALID", `第 ${index + 1} 门课程无效：${result.error.issues[0]?.message ?? "数据错误"}`);
-    if (result.data.semesterId !== semesterId) throw new ScheduleImportError("IMPORT_INVALID", "导入数据的学期已变化，请重新预览文件。");
-    if (result.data.weeks.some((week) => week > weekCount)) throw new ScheduleImportError("IMPORT_INVALID", "周次超出当前学期范围，请重新预览。");
-    if (!periodNos.includes(result.data.startPeriod) || !periodNos.includes(result.data.endPeriod)) throw new ScheduleImportError("IMPORT_INVALID", "节次不存在，请重新预览。");
-    return result.data;
+    if (!result.success) {
+      errors.push(...result.error.issues.map((issue) => issue.message));
+      return { rowNumber: index + 1, course: null, errors: [...new Set(errors)] };
+    }
+    if (result.data.semesterId !== semesterId) errors.push("导入数据的学期已变化，请重新生成预览");
+    if (result.data.weeks.some((week) => week > weekCount)) errors.push(`周次必须在 1-${weekCount} 周内`);
+    if (!periodNos.includes(result.data.startPeriod) || !periodNos.includes(result.data.endPeriod)) errors.push("节次不存在");
+    return { rowNumber: index + 1, course: result.data, errors: [...new Set(errors)] };
   });
-  for (let left = 0; left < parsed.length; left += 1) {
-    for (let right = left + 1; right < parsed.length; right += 1) {
-      if (coursesDuplicate(parsed[left], parsed[right]) || coursesConflict(parsed[left], parsed[right])) {
-        throw new ScheduleImportError("IMPORT_INVALID", `第 ${left + 1} 门与第 ${right + 1} 门课程重复或冲突，请修改文件后重新预览。`);
+  for (let left = 0; left < rows.length; left += 1) {
+    if (!rows[left].course) continue;
+    for (let right = left + 1; right < rows.length; right += 1) {
+      if (!rows[right].course) continue;
+      if (coursesDuplicate(rows[left].course!, rows[right].course!)) {
+        rows[left].errors.push(`与第 ${rows[right].rowNumber} 门课程重复`);
+        rows[right].errors.push(`与第 ${rows[left].rowNumber} 门课程重复`);
+      } else if (coursesConflict(rows[left].course!, rows[right].course!)) {
+        rows[left].errors.push(`与第 ${rows[right].rowNumber} 门课程时间冲突`);
+        rows[right].errors.push(`与第 ${rows[left].rowNumber} 门课程时间冲突`);
       }
     }
   }
-  return parsed;
+  return rows;
+}
+
+function validateConfirmedCourses(input: unknown[], semesterId: number, weekCount: number, periodNos: number[]) {
+  if (input.length === 0 || input.length > MAX_IMPORT_ROWS) throw new ScheduleImportError("IMPORT_INVALID", `请导入 1-${MAX_IMPORT_ROWS} 门课程。`);
+  const rows = validateCourseCandidates(input, semesterId, weekCount, periodNos);
+  const invalid = rows.find((row) => row.errors.length > 0 || !row.course);
+  if (invalid) throw new ScheduleImportError("IMPORT_INVALID", `第 ${invalid.rowNumber} 门课程无效：${invalid.errors.join("；") || "数据错误"}`);
+  return rows.map((row) => row.course!);
+}
+
+export async function previewParsedScheduleImport({ member, source, fileName, imported }: {
+  member: CurrentMember;
+  source: "henu";
+  fileName: string;
+  imported: unknown[];
+}) {
+  if (imported.length === 0) throw new ScheduleImportError("IMPORT_INVALID", "没有解析到可导入课程，请先核对教务系统课表。");
+  if (imported.length > MAX_IMPORT_ROWS) throw new ScheduleImportError("IMPORT_INVALID", `一次最多导入 ${MAX_IMPORT_ROWS} 门课程。`);
+  const config = await currentConfiguration();
+  const candidates = imported.map((course) => ({ ...(course as Record<string, unknown>), semesterId: config.semester.id }));
+  const rows = validateCourseCandidates(candidates, config.semester.id, config.semester.weekCount, config.periodNos);
+  const existing = await db.select(courseSelection()).from(courses)
+    .where(and(eq(courses.studentId, member.studentId), eq(courses.semesterId, config.semester.id)));
+  const validCourses = rows.filter((row): row is typeof row & { course: CourseInput } => Boolean(row.course) && row.errors.length === 0).map((row) => row.course);
+  return {
+    source,
+    fileName,
+    semester: config.semester,
+    rows,
+    validCourses,
+    errorCount: rows.filter((row) => row.errors.length > 0).length,
+    diff: summarizeImportDiff(validCourses, existing),
+  };
 }
 
 export async function confirmScheduleImport({ member, source, fileName, imported }: {
   member: CurrentMember;
-  source: "csv" | "xlsx";
+  source: ScheduleImportSource;
   fileName: string;
   imported: unknown[];
 }) {

@@ -165,7 +165,7 @@ export const scheduleVersions = pgTable("schedule_versions", {
   index("schedule_versions_semester_id_idx").on(table.semesterId),
   index("schedule_versions_created_by_user_id_idx").on(table.createdByUserId),
   check("schedule_versions_version_positive", sql`${table.versionNo} > 0`),
-  check("schedule_versions_source_valid", sql`${table.source} in ('csv', 'xlsx')`),
+  check("schedule_versions_source_valid", sql`${table.source} in ('csv', 'xlsx', 'henu')`),
   check("schedule_versions_course_count_valid", sql`${table.courseCount} >= 0`),
 ]);
 

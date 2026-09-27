@@ -1,49 +1,51 @@
 import "server-only";
 
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { db } from "@/db";
 import { courses, periods, semesters, students } from "@/db/schema";
-import { addRangeTimes, calculateAvailability, resolveTeachingDate } from "@/lib/availability-types";
+import { addRangeTimes, calculateAvailability, resolveDateForWeek, resolveTeachingDate } from "@/lib/availability-types";
 import { resolveMemberGrade } from "@/lib/member-grade";
 
 export class AvailabilityError extends Error {
-  constructor(public code: "OUTSIDE_SEMESTER" | "MEMBER_NOT_FOUND" | "NO_MEMBERS" | "DATE_RANGE_TOO_LARGE" | "INVALID_PERIOD_RANGE", message: string) {
+  constructor(public code: "OUTSIDE_SEMESTER" | "MEMBER_NOT_FOUND" | "NO_MEMBERS" | "INVALID_TIME_RANGE", message: string) {
     super(message);
   }
 }
 
 export type AvailabilityQuery = {
-  date: string;
-  dateTo?: string;
+  weekday: number;
+  week?: number;
   studentIds: number[];
-  minimumConsecutivePeriods: number;
   minimumMinutes?: number;
-  weekdays?: number[];
-  startPeriod?: number;
-  endPeriod?: number;
+  startTime?: string;
+  endTime?: string;
 };
+
+function minutesOfDay(value: string) {
+  const [hour = 0, minute = 0] = value.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
+}
 
 export async function queryAvailability(input: AvailabilityQuery) {
   const studentIds = [...new Set(input.studentIds)];
   if (studentIds.length === 0) throw new AvailabilityError("NO_MEMBERS", "请至少选择一位成员。");
 
-  const dateTo = input.dateTo ?? input.date;
-  const startDate = parseISO(input.date);
-  const endDate = parseISO(dateTo);
-  if (!isValid(startDate) || !isValid(endDate)) throw new AvailabilityError("DATE_RANGE_TOO_LARGE", "日期格式无效，请重新选择日期。");
-  const dayCount = differenceInCalendarDays(endDate, startDate) + 1;
-  if (dayCount < 1 || dayCount > 31) throw new AvailabilityError("DATE_RANGE_TOO_LARGE", "日期范围需为 1–31 天，请缩短查询范围。");
-  if ((input.startPeriod === undefined) !== (input.endPeriod === undefined) || (input.startPeriod !== undefined && input.endPeriod !== undefined && input.startPeriod > input.endPeriod)) {
-    throw new AvailabilityError("INVALID_PERIOD_RANGE", "结束节次不能早于开始节次。");
+  if ((input.startTime === undefined) !== (input.endTime === undefined)) {
+    throw new AvailabilityError("INVALID_TIME_RANGE", "请同时选择开始时间和结束时间。");
+  }
+  if (input.startTime !== undefined && input.endTime !== undefined && minutesOfDay(input.startTime) >= minutesOfDay(input.endTime)) {
+    throw new AvailabilityError("INVALID_TIME_RANGE", "结束时间必须晚于开始时间。");
   }
 
-  const semesterRows = await db.select({
+  const [semester] = await db.select({
     id: semesters.id, name: semesters.name, startDate: semesters.startDate,
     endDate: semesters.endDate, weekCount: semesters.weekCount,
-  }).from(semesters).orderBy(asc(semesters.startDate));
-  const semester = semesterRows.find((item) => input.date >= item.startDate && dateTo <= item.endDate);
-  if (!semester) throw new AvailabilityError("OUTSIDE_SEMESTER", "所选日期范围不在同一个已配置学期内，请调整日期。");
+  }).from(semesters).where(eq(semesters.isCurrent, true)).orderBy(asc(semesters.startDate)).limit(1);
+  if (!semester) throw new AvailabilityError("OUTSIDE_SEMESTER", "当前学期尚未配置，暂时不能查询。");
+
+  const week = input.week ?? (resolveTeachingDate(format(new Date(), "yyyy-MM-dd"), semester)?.week ?? 1);
+  if (week < 1 || week > semester.weekCount) throw new AvailabilityError("OUTSIDE_SEMESTER", `周次需在 1–${semester.weekCount} 之间。`);
 
   const memberRows = await db.select({ id: students.id, name: students.name, studentNo: students.studentNo })
     .from(students)
@@ -60,28 +62,24 @@ export async function queryAvailability(input: AvailabilityQuery) {
   ]);
 
   const periodNos = periodRows.map((item) => item.periodNo);
-  const dates = Array.from({ length: dayCount }, (_, index) => format(addDays(startDate, index), "yyyy-MM-dd"));
+  const occupied = courseRows.filter((course) => course.weekday === input.weekday && course.weeks.map(Number).includes(week));
+  const calculated = calculateAvailability(studentIds, periodNos, occupied, 1);
   const minimumMinutes = input.minimumMinutes ?? 0;
-  const days = dates.flatMap((date) => {
-    const teachingDate = resolveTeachingDate(date, semester);
-    if (!teachingDate) throw new AvailabilityError("OUTSIDE_SEMESTER", "所选日期超出该学期的教学周范围，请更换日期。");
-    if (input.weekdays?.length && !input.weekdays.includes(teachingDate.weekday)) return [];
-    const occupied = courseRows.filter((course) => course.weekday === teachingDate.weekday && course.weeks.map(Number).includes(teachingDate.week));
-    const calculated = calculateAvailability(studentIds, periodNos, occupied, input.minimumConsecutivePeriods);
-    const ranges = addRangeTimes(calculated.ranges, periodRows).filter((range) => range.durationMinutes >= minimumMinutes);
-    const windowPeriods = input.startPeriod === undefined || input.endPeriod === undefined
-      ? []
-      : periodNos.filter((periodNo) => periodNo >= input.startPeriod! && periodNo <= input.endPeriod!);
-    const freeStudentIdsForWindow = windowPeriods.length === 0 ? [] : studentIds.filter((studentId) =>
-      windowPeriods.every((periodNo) => calculated.freeStudentIdsByPeriod.find((item) => item.periodNo === periodNo)?.studentIds.includes(studentId)),
-    );
-    return [{ date, ...teachingDate, ...calculated, ranges, freeStudentIdsForWindow }];
-  });
+  const ranges = addRangeTimes(calculated.ranges, periodRows).filter((range) => range.durationMinutes >= minimumMinutes);
+
+  const windowPeriods = input.startTime === undefined || input.endTime === undefined
+    ? periodNos
+    : periodRows
+        .filter((period) => minutesOfDay(period.startTime) < minutesOfDay(input.endTime!) && minutesOfDay(period.endTime) > minutesOfDay(input.startTime!))
+        .map((period) => period.periodNo);
+  const freeStudentIdsForWindow = windowPeriods.length === 0 ? [] : studentIds.filter((studentId) =>
+    windowPeriods.every((periodNo) => calculated.freeStudentIdsByPeriod.find((item) => item.periodNo === periodNo)?.studentIds.includes(studentId)),
+  );
 
   return {
     semester,
     members: memberRows.map((member) => ({ ...member, grade: resolveMemberGrade(member.studentNo) })),
     periods: periodRows,
-    days,
+    days: [{ date: resolveDateForWeek(week, input.weekday, semester), week, weekday: input.weekday, ranges, freeStudentIdsForWindow }],
   };
 }

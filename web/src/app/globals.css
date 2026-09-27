@@ -413,3 +413,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 720px) {
   .availability-details { grid-template-columns: 1fr; }
 }
+
+.henu-sync-panel { padding: 28px; }
+.henu-sync-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin-top: 18px; }
+.henu-sync-form .field { flex: 1 1 220px; }
+.henu-sync-result { margin-top: 16px; padding: 16px 18px; border-radius: 14px; background: #e7f2ed; color: #28634d; }
+.henu-sync-result strong { color: var(--ink); }
+.henu-sync-result p { margin: 6px 0 0; font-size: 13px; }
+.henu-privacy-note { margin-top: 16px; }
+.henu-course-table { width: 100%; min-width: 820px; border-collapse: collapse; }
+.henu-course-table th, .henu-course-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.henu-course-table tr.invalid { background: #fff3ef; }
+.henu-course-table { width: 100%; margin-top: 14px; border-collapse: collapse; font-size: 13px; color: var(--ink); }
+.henu-course-table th, .henu-course-table td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+.henu-course-table th { background: var(--line-soft); font-weight: 700; }
