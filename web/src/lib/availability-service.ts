@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 import { db } from "@/db";
 import { courses, periods, semesters, students } from "@/db/schema";
 import { addRangeTimes, calculateAvailability, resolveTeachingDate } from "@/lib/availability-types";
@@ -29,7 +29,10 @@ export async function queryAvailability(input: AvailabilityQuery) {
   if (studentIds.length === 0) throw new AvailabilityError("NO_MEMBERS", "请至少选择一位成员。");
 
   const dateTo = input.dateTo ?? input.date;
-  const dayCount = differenceInCalendarDays(parseISO(dateTo), parseISO(input.date)) + 1;
+  const startDate = parseISO(input.date);
+  const endDate = parseISO(dateTo);
+  if (!isValid(startDate) || !isValid(endDate)) throw new AvailabilityError("DATE_RANGE_TOO_LARGE", "日期格式无效，请重新选择日期。");
+  const dayCount = differenceInCalendarDays(endDate, startDate) + 1;
   if (dayCount < 1 || dayCount > 31) throw new AvailabilityError("DATE_RANGE_TOO_LARGE", "日期范围需为 1–31 天，请缩短查询范围。");
   if ((input.startPeriod === undefined) !== (input.endPeriod === undefined) || (input.startPeriod !== undefined && input.endPeriod !== undefined && input.startPeriod > input.endPeriod)) {
     throw new AvailabilityError("INVALID_PERIOD_RANGE", "结束节次不能早于开始节次。");
@@ -57,7 +60,7 @@ export async function queryAvailability(input: AvailabilityQuery) {
   ]);
 
   const periodNos = periodRows.map((item) => item.periodNo);
-  const dates = Array.from({ length: dayCount }, (_, index) => format(addDays(parseISO(input.date), index), "yyyy-MM-dd"));
+  const dates = Array.from({ length: dayCount }, (_, index) => format(addDays(startDate, index), "yyyy-MM-dd"));
   const minimumMinutes = input.minimumMinutes ?? 0;
   const days = dates.flatMap((date) => {
     const teachingDate = resolveTeachingDate(date, semester);

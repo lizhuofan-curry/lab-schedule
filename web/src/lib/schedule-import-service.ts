@@ -34,15 +34,19 @@ async function recordsFromFile(file: File): Promise<{ source: "csv" | "xlsx"; re
   if (extension === "csv") {
     rows = parseCsv(new TextDecoder("utf-8").decode(await file.arrayBuffer()));
   } else if (extension === "xlsx") {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await file.arrayBuffer() as never);
-    const sheet = workbook.worksheets[0];
-    if (!sheet) throw new ScheduleImportError("FILE_INVALID", "Excel 中没有可读取的工作表。");
-    rows = [];
-    sheet.eachRow({ includeEmpty: false }, (row) => {
-      const values = Array.isArray(row.values) ? row.values : [];
-      rows.push(values.slice(1).map((value) => cellText(value as ExcelJS.CellValue)));
-    });
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await file.arrayBuffer() as never);
+      const sheet = workbook.worksheets[0];
+      if (!sheet) throw new Error("NO_WORKSHEET");
+      rows = [];
+      sheet.eachRow({ includeEmpty: false }, (row) => {
+        const values = Array.isArray(row.values) ? row.values : [];
+        rows.push(values.slice(1).map((value) => cellText(value as ExcelJS.CellValue)));
+      });
+    } catch {
+      throw new ScheduleImportError("FILE_INVALID", "Excel 文件无法读取，请确认文件未损坏且扩展名为 .xlsx。");
+    }
   } else {
     throw new ScheduleImportError("FILE_INVALID", "仅支持 .xlsx 或 .csv 文件，请先下载标准模板。");
   }
