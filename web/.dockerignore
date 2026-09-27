@@ -1,6 +1,8 @@
 node_modules
 .next
 .next-production-check
+.next-*
+_next_*
 .env
 .env.local
 npm-debug.log*
