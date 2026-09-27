@@ -12,6 +12,18 @@ export type AvailabilityRange = {
   endPeriod: number;
 };
 
+export type AvailabilityPeriod = {
+  periodNo: number;
+  startTime: string;
+  endTime: string;
+};
+
+export type TimedAvailabilityRange = AvailabilityRange & {
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+};
+
 export function resolveTeachingDate(date: string, semester: ScheduleSemester) {
   const parsed = parseISO(date);
   if (!isValid(parsed) || date < semester.startDate || date > semester.endDate) return null;
@@ -62,4 +74,25 @@ export function calculateAvailability(memberIds: number[], periodNos: number[], 
     commonFreePeriods,
     ranges: contiguousRanges(commonFreePeriods, minimum),
   };
+}
+
+function minutesOfDay(value: string) {
+  const [hour = 0, minute = 0] = value.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+export function addRangeTimes(ranges: AvailabilityRange[], periods: AvailabilityPeriod[]): TimedAvailabilityRange[] {
+  const periodByNo = new Map(periods.map((period) => [period.periodNo, period]));
+  return ranges.flatMap((range) => {
+    const included = periods.filter((period) => period.periodNo >= range.startPeriod && period.periodNo <= range.endPeriod);
+    const start = periodByNo.get(range.startPeriod);
+    const end = periodByNo.get(range.endPeriod);
+    if (!start || !end || included.length !== range.endPeriod - range.startPeriod + 1) return [];
+    return [{
+      ...range,
+      startTime: start.startTime.slice(0, 5),
+      endTime: end.endTime.slice(0, 5),
+      durationMinutes: included.reduce((total, period) => total + minutesOfDay(period.endTime) - minutesOfDay(period.startTime), 0),
+    }];
+  });
 }

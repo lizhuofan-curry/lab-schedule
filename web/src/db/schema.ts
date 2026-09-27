@@ -5,6 +5,7 @@ import {
   check,
   date,
   index,
+  integer,
   pgTable,
   smallint,
   text,
@@ -147,9 +148,52 @@ export const auditLogs = pgTable("audit_logs", {
   index("audit_entity_idx").on(table.entityType, table.entityId),
 ]);
 
+export const scheduleVersions = pgTable("schedule_versions", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  studentId: bigint("student_id", { mode: "number" }).notNull().references(() => students.id, { onDelete: "restrict" }),
+  semesterId: bigint("semester_id", { mode: "number" }).notNull().references(() => semesters.id, { onDelete: "restrict" }),
+  versionNo: integer("version_no").notNull(),
+  source: text("source").notNull(),
+  fileName: text("file_name"),
+  courseCount: integer("course_count").notNull(),
+  createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("schedule_versions_student_semester_version_uidx").on(table.studentId, table.semesterId, table.versionNo),
+  index("schedule_versions_student_semester_created_idx").on(table.studentId, table.semesterId, table.createdAt),
+  index("schedule_versions_student_id_idx").on(table.studentId),
+  index("schedule_versions_semester_id_idx").on(table.semesterId),
+  index("schedule_versions_created_by_user_id_idx").on(table.createdByUserId),
+  check("schedule_versions_version_positive", sql`${table.versionNo} > 0`),
+  check("schedule_versions_source_valid", sql`${table.source} in ('csv', 'xlsx')`),
+  check("schedule_versions_course_count_valid", sql`${table.courseCount} >= 0`),
+]);
+
+export const courseSnapshots = pgTable("course_snapshots", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  scheduleVersionId: bigint("schedule_version_id", { mode: "number" }).notNull().references(() => scheduleVersions.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  teacher: text("teacher"),
+  location: text("location"),
+  weekday: smallint("weekday").notNull(),
+  startPeriod: smallint("start_period").notNull(),
+  endPeriod: smallint("end_period").notNull(),
+  weeks: smallint("weeks").array().notNull(),
+  note: text("note"),
+  color: text("color").default("#dce8e3").notNull(),
+}, (table) => [
+  index("course_snapshots_schedule_version_id_idx").on(table.scheduleVersionId),
+  index("course_snapshots_schedule_version_weekday_idx").on(table.scheduleVersionId, table.weekday),
+  check("course_snapshots_name_not_blank", sql`length(trim(${table.name})) > 0`),
+  check("course_snapshots_weekday_valid", sql`${table.weekday} between 1 and 7`),
+  check("course_snapshots_period_range_valid", sql`${table.startPeriod} >= 1 and ${table.startPeriod} <= ${table.endPeriod}`),
+  check("course_snapshots_weeks_not_empty", sql`cardinality(${table.weeks}) > 0`),
+]);
+
 export const studentRelations = relations(students, ({ one, many }) => ({
   user: one(users, { fields: [students.userId], references: [users.id] }),
   courses: many(courses),
+  scheduleVersions: many(scheduleVersions),
 }));
 
 export const courseRelations = relations(courses, ({ one }) => ({
@@ -157,6 +201,17 @@ export const courseRelations = relations(courses, ({ one }) => ({
   semester: one(semesters, { fields: [courses.semesterId], references: [semesters.id] }),
 }));
 
-export const semesterRelations = relations(semesters, ({ many }) => ({ periods: many(periods), courses: many(courses) }));
+export const semesterRelations = relations(semesters, ({ many }) => ({ periods: many(periods), courses: many(courses), scheduleVersions: many(scheduleVersions) }));
 
 export const periodRelations = relations(periods, ({ one }) => ({ semester: one(semesters, { fields: [periods.semesterId], references: [semesters.id] }) }));
+
+export const scheduleVersionRelations = relations(scheduleVersions, ({ one, many }) => ({
+  student: one(students, { fields: [scheduleVersions.studentId], references: [students.id] }),
+  semester: one(semesters, { fields: [scheduleVersions.semesterId], references: [semesters.id] }),
+  createdBy: one(users, { fields: [scheduleVersions.createdByUserId], references: [users.id] }),
+  snapshots: many(courseSnapshots),
+}));
+
+export const courseSnapshotRelations = relations(courseSnapshots, ({ one }) => ({
+  version: one(scheduleVersions, { fields: [courseSnapshots.scheduleVersionId], references: [scheduleVersions.id] }),
+}));

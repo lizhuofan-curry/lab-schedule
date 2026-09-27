@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { courses, periods, semesters, students } from "@/db/schema";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import { calculateAvailability, resolveTeachingDate } from "@/lib/availability-types";
+import { resolveMemberGrade, type MemberGrade } from "@/lib/member-grade";
 
 export type PersonalSchedule = {
   semester: ScheduleSemester;
@@ -18,6 +19,7 @@ export type ScheduleMember = {
   name: string;
   studentNo: string | null;
   registered: boolean;
+  grade: MemberGrade;
 };
 
 export async function getCurrentScheduleConfig() {
@@ -46,7 +48,11 @@ export async function getMemberDirectory(query = ""): Promise<ScheduleMember[]> 
     .from(students)
     .where(search)
     .orderBy(asc(students.name), asc(students.id));
-  return rows.map(({ userId, ...student }) => ({ ...student, registered: userId !== null }));
+  return rows.map(({ userId, ...student }) => ({
+    ...student,
+    registered: userId !== null,
+    grade: resolveMemberGrade(student.studentNo),
+  }));
 }
 
 export async function getMemberWeekSchedule(studentId: number, semesterId: number, week: number) {

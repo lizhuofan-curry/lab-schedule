@@ -22,6 +22,13 @@
       "when": 1790489333866,
       "tag": "0002_luxuriant_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790514904886,
+      "tag": "0003_clear_lilith",
+      "breakpoints": true
     }
   ]
 }

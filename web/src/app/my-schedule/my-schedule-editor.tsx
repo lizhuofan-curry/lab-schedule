@@ -1,7 +1,8 @@
 "use client";
 
 import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { CourseDialog } from "@/components/course-dialog";
@@ -96,7 +97,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses }: { semest
 
   return (
     <>
-      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button>} />
+      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<div className="header-action-group"><Link className="button secondary" href="/my-schedule/import"><Upload size={17} /> 批量导入</Link><button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button></div>} />
       {notice && <div className="toast" role="status">✓ {notice}</div>}
       <section className="panel timetable-panel">
         <div className="table-toolbar">

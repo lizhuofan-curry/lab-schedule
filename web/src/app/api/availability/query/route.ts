@@ -4,8 +4,18 @@ import { getCurrentMember, unauthorized } from "@/lib/server-auth";
 
 const availabilitySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "请选择有效日期。"),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "请选择有效结束日期。").optional(),
   studentIds: z.array(z.number().int().positive()).min(1, "请至少选择一位成员。").max(100, "一次最多查询 100 位成员。"),
   minimumConsecutivePeriods: z.number().int().min(1).max(13),
+  minimumMinutes: z.number().int().min(0).max(720).optional(),
+  startPeriod: z.number().int().min(1).max(13).optional(),
+  endPeriod: z.number().int().min(1).max(13).optional(),
+}).superRefine((value, context) => {
+  if ((value.startPeriod === undefined) !== (value.endPeriod === undefined)) {
+    context.addIssue({ code: "custom", message: "请同时选择开始节次和结束节次。" });
+  } else if (value.startPeriod !== undefined && value.endPeriod !== undefined && value.startPeriod > value.endPeriod) {
+    context.addIssue({ code: "custom", message: "结束节次不能早于开始节次。" });
+  }
 });
 
 export async function POST(request: Request) {

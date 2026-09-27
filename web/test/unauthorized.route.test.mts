@@ -15,10 +15,27 @@ mock.module("@/lib/server-auth", {
   },
 });
 
+mock.module("@/lib/schedule-import-service", {
+  namedExports: {
+    ScheduleImportError: class ScheduleImportError extends Error {},
+    previewScheduleImport: async () => { throw new Error("不应执行"); },
+    confirmScheduleImport: async () => { throw new Error("不应执行"); },
+  },
+});
+
 const { GET } = await import("@/app/api/students/[id]/schedule/route");
+const importPreviewRoute = await import("@/app/api/my/schedule-import/preview/route");
+const importConfirmRoute = await import("@/app/api/my/schedule-import/confirm/route");
 
 test("未登录不能查看成员课表（返回 401）", async () => {
   const request = new Request("http://localhost/api/students/1/schedule?semester=1&week=1");
   const response = await GET(request, { params: Promise.resolve({ id: "1" }) });
   assert.equal(response.status, 401);
+});
+
+test("未登录不能预览或确认课表导入", async () => {
+  const preview = await importPreviewRoute.POST(new Request("http://localhost/api/my/schedule-import/preview", { method: "POST" }));
+  const confirm = await importConfirmRoute.POST(new Request("http://localhost/api/my/schedule-import/confirm", { method: "POST" }));
+  assert.equal(preview.status, 401);
+  assert.equal(confirm.status, 401);
 });

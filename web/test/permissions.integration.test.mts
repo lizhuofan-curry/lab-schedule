@@ -10,10 +10,11 @@ process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/sch
 
 const { db, sqlClient } = await import("@/db");
 const { migrate } = await import("drizzle-orm/postgres-js/migrator");
-const { courses, periods, semesters, students, users } = await import("@/db/schema");
+const { courses, courseSnapshots, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
+const { confirmScheduleImport } = await import("@/lib/schedule-import-service");
 
 let studentA = 0;
 let studentB = 0;
@@ -92,4 +93,24 @@ test("成员保存完全重复课程被拒（BR-06）", async () => {
     () => saveCourse({ input, studentId: studentB, actorUserId: "ub" }),
     (error: Error) => error instanceof DuplicateCourseError,
   );
+});
+
+test("批量导入只替换当前成员课表，并创建完整历史快照", async () => {
+  const imported = [courseInputSchema.parse({ semesterId, name: "甲导入的新课", location: "A101", weekday: 3, startPeriod: 7, endPeriod: 8, weeks: [1, 2, 3] })];
+  const version = await confirmScheduleImport({
+    member: { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" },
+    source: "xlsx",
+    fileName: "test.xlsx",
+    imported,
+  });
+  assert.equal(version.versionNo, 1);
+  const ownCourses = await db.select().from(courses).where(eq(courses.studentId, studentA));
+  const otherCourses = await db.select().from(courses).where(eq(courses.studentId, studentB));
+  const versions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  const snapshots = await db.select().from(courseSnapshots).where(eq(courseSnapshots.scheduleVersionId, version.id));
+  assert.deepEqual(ownCourses.map((course) => course.name), ["甲导入的新课"]);
+  assert.equal(otherCourses.some((course) => course.name === "乙的课"), true);
+  assert.equal(versions.length, 1);
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].location, "A101");
 });

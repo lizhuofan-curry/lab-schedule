@@ -9,6 +9,7 @@ import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import type { ScheduleMember } from "@/lib/schedule-service";
+import { memberGradeLabels, type MemberGrade } from "@/lib/member-grade";
 
 type DashboardCourse = ScheduleCourse & { studentId: number };
 
@@ -20,8 +21,9 @@ export function DashboardView({ semester, periods, members, courses, week, selec
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [grade, setGrade] = useState<MemberGrade | "all">("all");
   const [selected, setSelected] = useState(selectedStudentId);
-  const filtered = members.filter((member) => member.name.includes(query) || (member.studentNo ?? "").includes(query));
+  const filtered = members.filter((member) => (grade === "all" || member.grade === grade) && (member.name.includes(query) || (member.studentNo ?? "").includes(query)));
   const selectedMember = members.find((member) => member.id === selected) ?? members[0];
   const selectedCourses = useMemo(() => courses.filter((course) => course.studentId === selectedMember?.id), [courses, selectedMember?.id]);
   const today = new Date().getDay() || 7;
@@ -37,9 +39,12 @@ export function DashboardView({ semester, periods, members, courses, week, selec
       <section className="panel member-panel">
         <div className="panel-heading"><div><span className="eyebrow">真实成员目录</span><h2>选择一位同学</h2></div><span className="count-badge">{filtered.length} 人</span></div>
         <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>
+        <div className="grade-filter" role="group" aria-label="按年级筛选">
+          {(["all", "sophomore", "junior"] as const).map((value) => <button key={value} className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
+        </div>
         <div className="member-list">{filtered.map((member) => {
           const todayCount = courses.filter((course) => course.studentId === member.id && course.weekday === today).length;
-          return <button key={member.id} className={selected === member.id ? "member-row selected" : "member-row"} onClick={() => setSelected(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span className="member-copy"><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"}</small></span><span className={todayCount ? "status-dot busy" : "status-dot free"}>{todayCount ? "有课" : "空闲"}</span></button>;
+          return <button key={member.id} className={selected === member.id ? "member-row selected" : "member-row"} onClick={() => setSelected(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span className="member-copy"><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><span className={todayCount ? "status-dot busy" : "status-dot free"}>{todayCount ? "有课" : "空闲"}</span></button>;
         })}</div>
       </section>
       <section className="panel schedule-panel">

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateAvailability, resolveTeachingDate } from "./availability-types.ts";
+import { addRangeTimes, calculateAvailability, resolveTeachingDate } from "./availability-types.ts";
 
 const semester = { id: 1, name: "测试学期", startDate: "2026-08-31", endDate: "2027-01-03", weekCount: 18 };
 
@@ -28,4 +28,12 @@ test("多人共同空闲取所有成员占用节次的并集补集", () => {
 test("学期外日期不计算，学期内日期解析教学周和星期", () => {
   assert.equal(resolveTeachingDate("2027-01-04", semester), null);
   assert.deepEqual(resolveTeachingDate("2026-09-27", semester), { week: 4, weekday: 7 });
+});
+
+test("空闲分钟数按真实课时累加，不把课间计入可用时长", () => {
+  const [range] = addRangeTimes([{ startPeriod: 1, endPeriod: 2 }], [
+    { periodNo: 1, startTime: "08:00", endTime: "08:45" },
+    { periodNo: 2, startTime: "08:55", endTime: "09:40" },
+  ]);
+  assert.deepEqual(range, { startPeriod: 1, endPeriod: 2, startTime: "08:00", endTime: "09:40", durationMinutes: 90 });
 });

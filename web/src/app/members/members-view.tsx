@@ -7,6 +7,7 @@ import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { ScheduleMember } from "@/lib/schedule-service";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
+import { memberGradeLabels, type MemberGrade } from "@/lib/member-grade";
 
 const avatarColors = ["#316B5B", "#C96946", "#4D6F95", "#8B6A9A", "#A78038", "#4F7E7A"];
 
@@ -26,6 +27,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
   const [selectedId, setSelectedId] = useState(initialStudentId);
   const [week, setWeek] = useState(initialWeek);
   const [query, setQuery] = useState("");
+  const [grade, setGrade] = useState<MemberGrade | "all">("all");
   const [courses, setCourses] = useState(initialCourses);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,9 +36,12 @@ export function MembersView({ currentStudentId, members, semester, periods, init
   const selectedMember = members.find((member) => member.id === selectedId) ?? null;
   const filteredMembers = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return members;
-    return members.filter((member) => member.name.toLowerCase().includes(keyword) || member.studentNo?.toLowerCase().includes(keyword));
-  }, [members, query]);
+    return members.filter((member) => {
+      const matchesGrade = grade === "all" || member.grade === grade;
+      const matchesKeyword = !keyword || member.name.toLowerCase().includes(keyword) || member.studentNo?.toLowerCase().includes(keyword);
+      return matchesGrade && matchesKeyword;
+    });
+  }, [grade, members, query]);
 
   useEffect(() => {
     if (firstLoad.current && selectedId === initialStudentId && week === initialWeek) {
@@ -81,11 +86,14 @@ export function MembersView({ currentStudentId, members, semester, periods, init
       <div className="members-page-layout">
         <aside className="panel member-browser">
           <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>
-          <div className="member-directory-count">共 {members.length} 位成员</div>
+          <div className="grade-filter" role="group" aria-label="按年级筛选">
+            {(["all", "sophomore", "junior", "unknown"] as const).map((value) => <button key={value} className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
+          </div>
+          <div className="member-directory-count">显示 {filteredMembers.length} / {members.length} 位成员</div>
           {filteredMembers.map((member) => (
             <button key={member.id} className={member.id === selectedId ? "member-row selected" : "member-row"} onClick={() => selectMember(member.id)}>
               <span className="avatar" style={{ background: memberColor(member.id) }}>{member.name.slice(-1)}</span>
-              <span className="member-copy"><strong>{member.name}{member.id === currentStudentId ? "（我）" : ""}</strong><small>{member.studentNo ?? "学号待补"}</small></span>
+              <span className="member-copy"><strong>{member.name}{member.id === currentStudentId ? "（我）" : ""}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span>
               {!member.registered && <i className="registration pending">未注册</i>}
             </button>
           ))}
@@ -96,7 +104,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
             <>
               <div className="profile-heading">
                 <span className="avatar large" style={{ background: memberColor(selectedMember.id) }}>{selectedMember.name.slice(-1)}</span>
-                <div><span className="eyebrow">成员课表</span><h2>{selectedMember.name}{selectedMember.id === currentStudentId ? "（我）" : ""}</h2><p>{selectedMember.studentNo ?? "学号待补"} · 第 {week} 周</p></div>
+                <div><span className="eyebrow">成员课表 · {memberGradeLabels[selectedMember.grade]}</span><h2>{selectedMember.name}{selectedMember.id === currentStudentId ? "（我）" : ""}</h2><p>{selectedMember.studentNo ?? "学号待补"} · 第 {week} 周</p></div>
               </div>
               {error && <div className="form-error member-schedule-error" role="alert">{error}</div>}
               <div className={loading ? "schedule-loading" : ""} aria-busy={loading}>

@@ -21,6 +21,7 @@
     "better-auth": "latest",
     "date-fns": "latest",
     "drizzle-orm": "latest",
+    "exceljs": "^4.4.0",
     "lucide-react": "latest",
     "next": "latest",
     "postgres": "latest",

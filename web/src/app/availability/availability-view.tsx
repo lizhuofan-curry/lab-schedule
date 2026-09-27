@@ -1,25 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarSearch, Check, Clock3, Users } from "lucide-react";
+import { CalendarDays, Check, Clock3, Search, Users } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
+import { memberGradeLabels, type MemberGrade } from "@/lib/member-grade";
 import type { ScheduleMember } from "@/lib/schedule-service";
 import type { SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import { weekdays } from "@/lib/schedule-types";
 
-type AvailabilityResult = {
+type SearchMode = "person" | "time" | "group";
+type GradeFilter = "all" | MemberGrade;
+
+type AvailabilityDay = {
   date: string;
   week: number;
   weekday: number;
-  members: Array<{ id: number; name: string; studentNo: string | null }>;
-  periods: SchedulePeriod[];
-  allDayFreeStudentIds: number[];
-  freeStudentIdsByPeriod: Array<{ periodNo: number; studentIds: number[] }>;
-  commonFreePeriods: number[];
-  ranges: Array<{ startPeriod: number; endPeriod: number }>;
+  ranges: Array<{
+    startPeriod: number;
+    endPeriod: number;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+  }>;
+  freeStudentIdsForWindow: number[];
 };
 
-function displayTime(value: string) { return value.slice(0, 5); }
+type AvailabilityResult = {
+  members: Array<{ id: number; name: string; studentNo: string | null; grade: MemberGrade }>;
+  periods: SchedulePeriod[];
+  days: AvailabilityDay[];
+};
+
+const modeCopy: Record<SearchMode, { label: string; title: string; description: string }> = {
+  person: { label: "查一个人", title: "这个人什么时候有空？", description: "选择成员和日期范围，查看每段空闲时间及持续时长。" },
+  time: { label: "按时间找人", title: "这段时间谁有空？", description: "指定日期和节次，找出整段时间都没有课的成员。" },
+  group: { label: "查共同空闲", title: "大家什么时候都有空？", description: "选择多位成员，寻找适合开会或分配任务的连续空闲。" },
+};
+
+function formatDate(date: string) {
+  const [, month, day] = date.split("-");
+  return `${month}月${day}日`;
+}
 
 export function AvailabilityView({ members, defaultDate, semester, currentUser }: {
   members: ScheduleMember[];
@@ -27,66 +48,132 @@ export function AvailabilityView({ members, defaultDate, semester, currentUser }
   semester: ScheduleSemester;
   currentUser: { name: string; studentNo: string };
 }) {
+  const [mode, setMode] = useState<SearchMode>("person");
+  const [grade, setGrade] = useState<GradeFilter>("all");
+  const [personId, setPersonId] = useState<number | null>(members[0]?.id ?? null);
   const [selected, setSelected] = useState<number[]>(members.map((member) => member.id));
   const [date, setDate] = useState(defaultDate);
-  const [minimum, setMinimum] = useState(2);
+  const [dateTo, setDateTo] = useState(defaultDate);
+  const [minimumPeriods, setMinimumPeriods] = useState(1);
+  const [minimumMinutes, setMinimumMinutes] = useState(45);
+  const [startPeriod, setStartPeriod] = useState(1);
+  const [endPeriod, setEndPeriod] = useState(2);
   const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(members.length > 0);
 
+  const visibleMembers = useMemo(
+    () => members.filter((member) => grade === "all" || member.grade === grade),
+    [grade, members],
+  );
+  const queryIds = useMemo(() => {
+    if (mode === "person") return personId ? [personId] : [];
+    if (mode === "time") return visibleMembers.map((member) => member.id);
+    return selected;
+  }, [mode, personId, selected, visibleMembers]);
+  const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
+
   useEffect(() => {
-    if (selected.length === 0) return;
+    if (queryIds.length === 0) return;
     const controller = new AbortController();
     fetch("/api/availability/query", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ date, studentIds: selected, minimumConsecutivePeriods: minimum }),
+      body: JSON.stringify({
+        date,
+        dateTo,
+        studentIds: queryIds,
+        minimumConsecutivePeriods: mode === "time" ? 1 : minimumPeriods,
+        minimumMinutes: mode === "time" ? 0 : minimumMinutes,
+        ...(mode === "time" ? { startPeriod, endPeriod } : {}),
+      }),
       signal: controller.signal,
     }).then(async (response) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message ?? "查询失败，请稍后重试。");
       setResult(payload.data);
-    }).catch((reason) => {
-      if (reason.name !== "AbortError") { setResult(null); setError(reason.message); }
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }).catch((reason: Error) => {
+      if (reason.name !== "AbortError") {
+        setResult(null);
+        setError(reason.message);
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
     return () => controller.abort();
-  }, [date, minimum, selected]);
+  }, [date, dateTo, endPeriod, minimumMinutes, minimumPeriods, mode, queryIds, startPeriod]);
 
-  const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
-  function toggle(id: number) {
-    const next = selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
-    setSelected(next);
-    setResult(next.length === 0 ? null : result);
-    setError(next.length === 0 ? "请至少选择一位成员。" : "");
-    setLoading(next.length > 0);
+  function toggleMember(id: number) {
+    setLoading(true);
+    setError("");
+    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
-  function selectAll() { setSelected(members.map((member) => member.id)); setError(""); setLoading(members.length > 0); }
-  function changeDate(value: string) { setDate(value); setError(""); setLoading(true); }
-  function changeMinimum(value: number) { setMinimum(value); setError(""); setLoading(true); }
+  function updateStartDate(value: string) {
+    setLoading(true);
+    setError("");
+    setDate(value);
+    if (dateTo < value) setDateTo(value);
+  }
+
+  const selectedPerson = personId ? memberById.get(personId) : null;
+  const freeWindowCount = result?.days.reduce((total, day) => total + day.freeStudentIdsForWindow.length, 0) ?? 0;
 
   return <AppShell currentUser={currentUser}>
-    <PageHeader eyebrow="数据库实时查询" title="找共同空闲" description="选择日期、参与成员和连续节数，系统会自动读取当前数据库中的有效课程。" />
-    <div className="availability-layout">
+    <PageHeader eyebrow="MVP-B · 灵活检索" title="查找空闲时间" description="按成员、时间段或参与人群检索数据库中的真实课表。空闲时长只计算上课节次，不把课间休息算进去。" />
+
+    <div className="availability-mode-tabs" role="tablist" aria-label="选择检索方式">
+      {(Object.keys(modeCopy) as SearchMode[]).map((item) => <button key={item} role="tab" aria-selected={mode === item} className={mode === item ? "active" : ""} onClick={() => { setMode(item); setError(""); setLoading(true); }}>
+        {item === "person" ? <Search size={18} /> : item === "time" ? <Clock3 size={18} /> : <Users size={18} />}
+        <span>{modeCopy[item].label}</span>
+      </button>)}
+    </div>
+
+    <div className="availability-layout availability-layout-wide">
       <section className="panel filter-panel">
-        <div className="panel-heading"><div><span className="eyebrow">查询条件</span><h2>谁需要参加？</h2></div><button className="text-link" onClick={selectAll}>选择全部</button></div>
-        <div className="selection-list">{members.map((member) => <button key={member.id} className={selected.includes(member.id) ? "select-person selected" : "select-person"} onClick={() => toggle(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"}</small></span><i>{selected.includes(member.id) && <Check size={14} />}</i></button>)}</div>
-        <div className="filter-fields">
-          <label className="field"><span>选择日期</span><input type="date" min={semester.startDate} max={semester.endDate} value={date} onChange={(event) => changeDate(event.target.value)} /></label>
-          <label className="field"><span>至少连续</span><select value={minimum} onChange={(event) => changeMinimum(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value} 节</option>)}</select></label>
+        <div className="panel-heading"><div><span className="eyebrow">查询条件</span><h2>{modeCopy[mode].title}</h2><p>{modeCopy[mode].description}</p></div></div>
+
+        <div className="grade-filter" aria-label="按年级筛选">
+          {(["all", "sophomore", "junior", "unknown"] as GradeFilter[]).map((item) => <button key={item} className={grade === item ? "active" : ""} onClick={() => { setGrade(item); setLoading(true); setError(""); }}>{item === "all" ? "全部" : memberGradeLabels[item]}</button>)}
+        </div>
+
+        {mode === "person" && <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={personId === member.id ? "select-person selected" : "select-person"} onClick={() => { setPersonId(member.id); setLoading(true); setError(""); }}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{personId === member.id && <Check size={14} />}</i></button>)}</div>}
+
+        {mode === "group" && <>
+          <div className="selection-actions"><span>已选 {selected.length} 人</span><button className="text-link" onClick={() => { setSelected(visibleMembers.map((member) => member.id)); setLoading(true); setError(""); }}>选择当前年级全部</button></div>
+          <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={selected.includes(member.id) ? "select-person selected" : "select-person"} onClick={() => toggleMember(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{selected.includes(member.id) && <Check size={14} />}</i></button>)}</div>
+        </>}
+
+        {mode === "time" && <div className="filter-note"><Users size={18} /><span>将在当前筛选的 <strong>{visibleMembers.length}</strong> 位成员中查找。</span></div>}
+
+        <div className="filter-fields availability-fields">
+          <label className="field"><span>开始日期</span><input type="date" min={semester.startDate} max={semester.endDate} value={date} onChange={(event) => updateStartDate(event.target.value)} /></label>
+          <label className="field"><span>结束日期</span><input type="date" min={date} max={semester.endDate} value={dateTo} onChange={(event) => { setDateTo(event.target.value); setLoading(true); setError(""); }} /></label>
+          {mode !== "time" && <>
+            <label className="field"><span>至少连续</span><select value={minimumPeriods} onChange={(event) => { setMinimumPeriods(Number(event.target.value)); setLoading(true); setError(""); }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value} 节</option>)}</select></label>
+            <label className="field"><span>至少空闲</span><select value={minimumMinutes} onChange={(event) => { setMinimumMinutes(Number(event.target.value)); setLoading(true); setError(""); }}>{[45, 90, 135, 180].map((value) => <option key={value} value={value}>{value} 分钟</option>)}</select></label>
+          </>}
+          {mode === "time" && <>
+            <label className="field"><span>开始节次</span><select value={startPeriod} onChange={(event) => { const value = Number(event.target.value); setStartPeriod(value); if (endPeriod < value) setEndPeriod(value); setLoading(true); setError(""); }}>{Array.from({ length: 13 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>第 {value} 节</option>)}</select></label>
+            <label className="field"><span>结束节次</span><select value={endPeriod} onChange={(event) => { setEndPeriod(Number(event.target.value)); setLoading(true); setError(""); }}>{Array.from({ length: 13 - startPeriod + 1 }, (_, index) => startPeriod + index).map((value) => <option key={value} value={value}>第 {value} 节</option>)}</select></label>
+          </>}
         </div>
       </section>
+
       <section className="panel result-panel">
-        {loading && <div className="empty-result"><Clock3 size={28} /><strong>正在读取数据库…</strong></div>}
-        {!loading && error && <div className="form-error" role="alert">{error}</div>}
-        {!loading && result && <>
-          <div className="result-summary"><span className="result-icon"><CalendarSearch size={24} /></span><div><span className="eyebrow">第 {result.week} 周 · {weekdays[result.weekday - 1]}</span><h2>找到 {result.ranges.length} 个合适时段</h2><p>{selected.length} 位成员共同空闲，至少连续 {minimum} 节。</p></div></div>
-          <div className="timeline">{result.ranges.length ? result.ranges.map(({ startPeriod, endPeriod }) => {
-            const start = result.periods.find((period) => period.periodNo === startPeriod);
-            const end = result.periods.find((period) => period.periodNo === endPeriod);
-            return <article className="time-result" key={`${startPeriod}-${endPeriod}`}><div className="time-range"><strong>{displayTime(start?.startTime ?? "")}</strong><span>至</span><strong>{displayTime(end?.endTime ?? "")}</strong></div><div><h3>第 {startPeriod}{startPeriod === endPeriod ? "" : `–${endPeriod}`} 节</h3><p><Users size={15} /> {selected.map((id) => memberById.get(id)?.name).filter(Boolean).join("、")}</p></div><span className="available-chip"><Clock3 size={14} /> 可安排</span></article>;
-          }) : <div className="empty-result"><Clock3 size={28} /><strong>没有满足条件的连续时间</strong><p>可以减少参与者或降低连续节数后再试。</p></div>}</div>
-          <div className="availability-details"><div><span className="eyebrow">全天没课</span><p>{result.allDayFreeStudentIds.length ? result.allDayFreeStudentIds.map((id) => memberById.get(id)?.name).filter(Boolean).join("、") : "所选成员当天都有课程"}</p></div><div><span className="eyebrow">逐节空闲人数</span><p>{result.freeStudentIdsByPeriod.map((item) => `第${item.periodNo}节 ${item.studentIds.length}人`).join(" · ")}</p></div></div>
+        {queryIds.length === 0 && <div className="form-error" role="alert">请至少选择一位成员。</div>}
+        {queryIds.length > 0 && loading && <div className="empty-result"><Clock3 size={28} /><strong>正在读取课表…</strong><p>查询范围较大时可能需要稍等片刻。</p></div>}
+        {queryIds.length > 0 && !loading && error && <div className="form-error" role="alert">{error}</div>}
+        {queryIds.length > 0 && !loading && result && <>
+          <div className="result-summary"><span className="result-icon"><CalendarDays size={24} /></span><div><span className="eyebrow">{formatDate(date)} 至 {formatDate(dateTo)}</span><h2>{mode === "time" ? `找到 ${freeWindowCount} 人次空闲` : `找到 ${result.days.reduce((total, day) => total + day.ranges.length, 0)} 个可用时段`}</h2><p>{mode === "person" ? `正在查看 ${selectedPerson?.name ?? "所选成员"} 的空闲时间。` : mode === "time" ? `要求第 ${startPeriod}–${endPeriod} 节全程无课。` : `${queryIds.length} 位成员必须同时空闲。`}</p></div></div>
+
+          <div className="availability-day-list">{result.days.map((day) => {
+            const freeMembers = day.freeStudentIdsForWindow.map((id) => memberById.get(id)).filter(Boolean);
+            return <article className="availability-day" key={day.date}>
+              <header><div><strong>{formatDate(day.date)} · {weekdays[day.weekday - 1]}</strong><span>第 {day.week} 周</span></div>{mode !== "time" && <span>{day.ranges.length} 段空闲</span>}</header>
+              {mode === "time" ? (freeMembers.length ? <div className="free-member-grid">{freeMembers.map((member) => member && <div key={member.id}><span className="avatar small-avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{memberGradeLabels[member.grade]}</small></span></div>)}</div> : <div className="day-empty">这段时间没有符合条件的成员</div>) : (day.ranges.length ? <div className="timeline compact-timeline">{day.ranges.map((range) => <div className="time-result" key={`${range.startPeriod}-${range.endPeriod}`}><div className="time-range"><strong>{range.startTime}</strong><span>至</span><strong>{range.endTime}</strong></div><div><h3>第 {range.startPeriod}{range.startPeriod === range.endPeriod ? "" : `–${range.endPeriod}`} 节</h3><p><Clock3 size={15} /> 共 {range.durationMinutes} 分钟</p></div><span className="available-chip">可安排</span></div>)}</div> : <div className="day-empty">当天没有满足条件的连续空闲</div>)}
+            </article>;
+          })}</div>
         </>}
       </section>
     </div>
