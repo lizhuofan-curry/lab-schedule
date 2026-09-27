@@ -6,13 +6,13 @@ import { db } from "@/db";
 import { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semesters, students } from "@/db/schema";
 import { courseInputSchema, type CourseInput } from "@/lib/course-schema";
 import { coursesConflict, coursesDuplicate } from "@/lib/course-rules";
-import { importHeaders, parseCsv, recordsFromRows, summarizeImportDiff, validateImportRecords, type ImportRecord } from "@/lib/schedule-import";
+import { importHeaders, parseCsv, recordsFromPastedText, recordsFromRows, summarizeImportDiff, validateImportRecords, type ImportRecord } from "@/lib/schedule-import";
 import type { CurrentMember } from "@/lib/server-auth";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 200;
 
-export type ScheduleImportSource = "csv" | "xlsx" | "henu";
+export type ScheduleImportSource = "csv" | "xlsx" | "henu" | "text";
 
 export class ScheduleImportError extends Error {
   constructor(public code: "FILE_INVALID" | "IMPORT_INVALID" | "SEMESTER_NOT_FOUND", message: string) { super(message); }
@@ -88,6 +88,28 @@ export async function previewScheduleImport(file: File, member: CurrentMember) {
   return {
     source,
     fileName: file.name,
+    semester: config.semester,
+    rows,
+    validCourses,
+    errorCount: rows.filter((row) => row.errors.length > 0).length,
+    diff: summarizeImportDiff(validCourses, existing),
+  };
+}
+
+export async function previewPastedScheduleImport(text: string, member: CurrentMember) {
+  if (text.length > 100_000) throw new ScheduleImportError("FILE_INVALID", "粘贴内容不能超过 10 万字符，请只复制课表区域。");
+  let records: ImportRecord[];
+  try { records = recordsFromPastedText(text); }
+  catch (error) { throw new ScheduleImportError("FILE_INVALID", error instanceof Error ? error.message : "无法识别粘贴内容。"); }
+  if (records.length > MAX_IMPORT_ROWS) throw new ScheduleImportError("FILE_INVALID", `一次最多导入 ${MAX_IMPORT_ROWS} 门课程。`);
+  const config = await currentConfiguration();
+  const rows = validateImportRecords(records, config.semester.id, config.semester.weekCount, config.periodNos);
+  const existing = await db.select(courseSelection()).from(courses)
+    .where(and(eq(courses.studentId, member.studentId), eq(courses.semesterId, config.semester.id)));
+  const validCourses = rows.filter((row) => row.course && row.errors.length === 0).map((row) => row.course!);
+  return {
+    source: "text" as const,
+    fileName: "粘贴的教务课表",
     semester: config.semester,
     rows,
     validCourses,

@@ -36,6 +36,13 @@
       "when": 1790527513990,
       "tag": "0004_luxuriant_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790552440257,
+      "tag": "0005_fancy_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -14,7 +14,7 @@ User 1 ── * AuditLog
 MVP-B：Student + Semester 1 ── * ScheduleVersion 1 ── * CourseSnapshot
 ```
 
-河大统一认证密码不建表、不持久化。河大课表确认导入复用 ScheduleVersion，`source` 取 `henu`；文件模板导入则取 `csv` 或 `xlsx`。
+河大统一认证密码不建表、不持久化。河大课表确认导入复用 ScheduleVersion，`source` 取 `henu`；文件模板导入取 `csv` 或 `xlsx`，复制表格导入取 `text`。
 
 ## 2. 核心表
 

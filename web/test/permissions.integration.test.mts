@@ -136,3 +136,18 @@ test("河大确认导入复用本人整表事务，并且审计中不包含密�
   assert.equal(logs.length, 1);
   assert.equal(JSON.stringify(logs).toLowerCase().includes("password"), false);
 });
+
+test("粘贴表格确认导入创建 text 来源版本且不影响他人", async () => {
+  const imported = [courseInputSchema.parse({ semesterId, name: "粘贴导入课程", weekday: 2, startPeriod: 5, endPeriod: 5, weeks: [2, 4, 6] })];
+  const version = await confirmScheduleImport({
+    member: { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" },
+    source: "text",
+    fileName: "粘贴的教务课表",
+    imported,
+  });
+  const [storedVersion] = await db.select().from(scheduleVersions).where(eq(scheduleVersions.id, version.id));
+  const otherCourses = await db.select().from(courses).where(eq(courses.studentId, studentB));
+  assert.equal(version.versionNo, 3);
+  assert.equal(storedVersion.source, "text");
+  assert.equal(otherCourses.some((course) => course.name === "乙的课"), true);
+});

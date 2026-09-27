@@ -74,6 +74,97 @@ export function recordsFromRows(rows: string[][]): ImportRecord[] {
   return rows.slice(1).map((values) => Object.fromEntries(importHeaders.map((name) => [name, values[header.indexOf(name)]?.trim() ?? ""])) as ImportRecord);
 }
 
+const pastedHeaderAliases: Record<ImportHeader, string[]> = {
+  "课程名称": ["课程名称", "课程名", "课程"],
+  "教师": ["教师", "任课教师", "授课教师"],
+  "地点": ["地点", "上课地点", "教室"],
+  "星期": ["星期", "周几", "上课星期"],
+  "开始节次": ["开始节次", "起始节次"],
+  "结束节次": ["结束节次", "终止节次"],
+  "周次": ["周次", "上课周次"],
+  "备注": ["备注", "说明"],
+  "颜色": ["颜色"],
+};
+
+function normalizedHeader(value: string) {
+  return value.trim().replace(/\s+/g, "").replace(/[：:]/g, "");
+}
+
+function headerIndex(header: string[], aliases: string[]) {
+  const normalized = header.map(normalizedHeader);
+  return aliases.map(normalizedHeader).map((alias) => normalized.indexOf(alias)).find((index) => index >= 0) ?? -1;
+}
+
+function cleanCourseName(value: string) {
+  return value.trim().replace(/^\[[^\]]+\]\s*/, "");
+}
+
+function weekdayText(value: string) {
+  const map: Record<string, string> = { 一: "周一", 二: "周二", 三: "周三", 四: "周四", 五: "周五", 六: "周六", 日: "周日", 天: "周日" };
+  return map[value] ?? value;
+}
+
+/**
+ * 解析从 Excel 或教务系统结果表直接复制的文本。
+ * 支持制表符表格、CSV，以及“1-18周 五[3-5] 教室”形式的组合上课时间列。
+ */
+export function recordsFromPastedText(text: string): ImportRecord[] {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("请先粘贴包含表头和课程数据的表格");
+  const rows = trimmed.includes("\t")
+    ? trimmed.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.split("\t").map((cell) => cell.trim()))
+    : parseCsv(trimmed);
+  const header = rows[0] ?? [];
+  const courseIndex = headerIndex(header, pastedHeaderAliases["课程名称"]);
+  if (courseIndex < 0) throw new Error("没有找到“课程”或“课程名称”列，请连同表头一起复制");
+
+  const indices = Object.fromEntries(importHeaders.map((name) => [name, headerIndex(header, pastedHeaderAliases[name])])) as Record<ImportHeader, number>;
+  const combinedPeriodIndex = headerIndex(header, ["节次", "上课节次"]);
+  const combinedScheduleIndex = headerIndex(header, ["上课时间/上课地点", "上课时间与地点", "上课时间地点", "上课安排"]);
+  const hasSeparateSchedule = indices["星期"] >= 0 && indices["周次"] >= 0
+    && ((indices["开始节次"] >= 0 && indices["结束节次"] >= 0) || combinedPeriodIndex >= 0);
+  if (!hasSeparateSchedule && combinedScheduleIndex < 0) {
+    throw new Error("缺少上课安排列：请提供星期、周次和节次，或“上课时间/上课地点”列");
+  }
+
+  const result: ImportRecord[] = [];
+  for (const values of rows.slice(1)) {
+    const name = cleanCourseName(values[courseIndex] ?? "");
+    if (!name && values.every((value) => !value.trim())) continue;
+    const base = Object.fromEntries(importHeaders.map((key) => [key, indices[key] >= 0 ? values[indices[key]]?.trim() ?? "" : ""])) as ImportRecord;
+    base["课程名称"] = name;
+
+    if (combinedScheduleIndex >= 0) {
+      const scheduleText = values[combinedScheduleIndex] ?? "";
+      const pattern = /(\d+)\s*-\s*(\d+)\s*周?\s*(单|双)?\s*[周星期]?\s*([一二三四五六日天1-7])\s*\[\s*(\d+)\s*-\s*(\d+)\s*\]\s*([^;；]*)/g;
+      const matches = [...scheduleText.matchAll(pattern)];
+      if (matches.length === 0) {
+        result.push({ ...base, "周次": scheduleText });
+        continue;
+      }
+      for (const match of matches) {
+        result.push({
+          ...base,
+          "周次": `${match[1]}-${match[2]}${match[3] ?? ""}`,
+          "星期": weekdayText(match[4]),
+          "开始节次": match[5],
+          "结束节次": match[6],
+          "地点": (match[7] || base["地点"]).trim().replace(/\s*\(\d+\)\s*$/, ""),
+        });
+      }
+      continue;
+    }
+
+    if (combinedPeriodIndex >= 0) {
+      const period = (values[combinedPeriodIndex] ?? "").match(/(\d+)\s*[-~至]\s*(\d+)/);
+      if (period) { base["开始节次"] = period[1]; base["结束节次"] = period[2]; }
+    }
+    result.push(base);
+  }
+  if (result.length === 0) throw new Error("表格中没有课程数据");
+  return result;
+}
+
 export function validateImportRecords(records: ImportRecord[], semesterId: number, weekCount: number, validPeriodNos: number[]) {
   const rows: ImportPreviewRow[] = records.map((raw, index) => {
     const errors: string[] = [];
