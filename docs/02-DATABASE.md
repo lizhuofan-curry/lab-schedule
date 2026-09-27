@@ -1,4 +1,4 @@
-# 数据库设计（MVP-A）
+# 数据库设计（MVP-B）
 
 数据库：PostgreSQL。所有时间戳使用 `timestamptz`；单库业务表使用 `bigint generated always as identity` 主键，认证系统保留其文本 ID；周次使用 `smallint[]`，不保存“1-16周”等展示文本。
 
@@ -67,7 +67,9 @@ existing.end_period >= new.start_period
 
 ## 4. MVP-B 版本模型
 
-`schedule_versions` 记录版本号、成员、学期、来源和创建者；`course_snapshots` 保存该版本整份课表。确认批量导入时一次事务写入新版本和完整快照。网页单条 CRUD 不生成 Snapshot，只写 AuditLog。
+`schedule_versions` 记录版本号、成员、学期、来源、原文件名、课程数、创建者和创建时间；同一成员、学期、版本号唯一。`course_snapshots` 保存该版本整份课表，并为 `schedule_version_id` 建立查询索引。
+
+确认批量导入时先锁定当前成员行，再在一个短事务内写入新版本和完整快照、替换本人当前学期课程并追加 AuditLog。网页单条 CRUD 不生成 Snapshot，只写 AuditLog；MVP-B 历史版本只读，不提供回退。
 
 ## 5. 删除策略
 

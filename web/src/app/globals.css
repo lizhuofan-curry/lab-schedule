@@ -220,6 +220,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .select-person.selected > i { background: var(--forest-2); border-color: var(--forest-2); }
 .filter-fields { padding-top: 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .availability-fields { margin-top: 24px; }
+.availability-check { min-height: 44px; padding: 10px 12px; border-radius: 10px; background: #f3f7f5; display: flex; align-items: center; gap: 9px; }
+.availability-check input { width: auto; min-height: auto; }
+.availability-check > span { font-size: 13px; }
 .filter-note { margin: 24px 0 0; padding: 15px; border-radius: 12px; background: #edf4f1; color: #356651; display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .result-summary { display: flex; align-items: center; gap: 17px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .result-icon { width: 58px; height: 58px; border-radius: 16px; background: #e2eee9; color: var(--forest-2); display: grid; place-items: center; }

@@ -19,6 +19,7 @@ export type AvailabilityQuery = {
   studentIds: number[];
   minimumConsecutivePeriods: number;
   minimumMinutes?: number;
+  weekdays?: number[];
   startPeriod?: number;
   endPeriod?: number;
 };
@@ -58,9 +59,10 @@ export async function queryAvailability(input: AvailabilityQuery) {
   const periodNos = periodRows.map((item) => item.periodNo);
   const dates = Array.from({ length: dayCount }, (_, index) => format(addDays(parseISO(input.date), index), "yyyy-MM-dd"));
   const minimumMinutes = input.minimumMinutes ?? 0;
-  const days = dates.map((date) => {
+  const days = dates.flatMap((date) => {
     const teachingDate = resolveTeachingDate(date, semester);
     if (!teachingDate) throw new AvailabilityError("OUTSIDE_SEMESTER", "所选日期超出该学期的教学周范围，请更换日期。");
+    if (input.weekdays?.length && !input.weekdays.includes(teachingDate.weekday)) return [];
     const occupied = courseRows.filter((course) => course.weekday === teachingDate.weekday && course.weeks.map(Number).includes(teachingDate.week));
     const calculated = calculateAvailability(studentIds, periodNos, occupied, input.minimumConsecutivePeriods);
     const ranges = addRangeTimes(calculated.ranges, periodRows).filter((range) => range.durationMinutes >= minimumMinutes);
@@ -70,7 +72,7 @@ export async function queryAvailability(input: AvailabilityQuery) {
     const freeStudentIdsForWindow = windowPeriods.length === 0 ? [] : studentIds.filter((studentId) =>
       windowPeriods.every((periodNo) => calculated.freeStudentIdsByPeriod.find((item) => item.periodNo === periodNo)?.studentIds.includes(studentId)),
     );
-    return { date, ...teachingDate, ...calculated, ranges, freeStudentIdsForWindow };
+    return [{ date, ...teachingDate, ...calculated, ranges, freeStudentIdsForWindow }];
   });
 
   return {

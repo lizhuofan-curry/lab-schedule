@@ -1,4 +1,4 @@
-# API 设计（MVP-A）
+# API 设计（MVP-B）
 
 统一返回 JSON。未登录返回 `401`，无权限返回 `403`，资源不存在返回 `404`，业务校验失败返回 `422`，并包含面向用户的中文 `message`。
 
@@ -43,18 +43,33 @@ MVP-A 不提供成员名册写入接口；名册由项目部署初始化数据�
 ```json
 {
   "date": "2026-09-28",
+  "dateTo": "2026-10-04",
   "studentIds": [1, 2],
-  "minimumConsecutivePeriods": 2
+  "minimumConsecutivePeriods": 2,
+  "minimumMinutes": 90,
+  "weekdays": [1, 3, 5],
+  "startPeriod": 3,
+  "endPeriod": 4
 }
 ```
 
-响应包含：目标教学周、全天没课成员、逐节空闲成员、共同空闲节次和连续区间。日期必须落在学期内；成员列表去重且限制最大数量。
+`dateTo` 最多跨 31 天；`weekdays` 可选。`startPeriod/endPeriod` 同时传入时返回整段时间都无课的成员；不传时返回全天没课成员、逐节空闲成员、共同空闲区间、起止时间和按实际课时累计的分钟数。日期必须落在同一学期内；成员列表去重且限制最大数量。
 
-## 5. 初始化配置
+## 5. 标准课表导入
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/my/schedule-import/template?format=xlsx|csv` | 登录 | 下载固定列模板 |
+| POST | `/api/my/schedule-import/preview` | 登录 | 上传最大 2 MB 文件，逐行校验并返回冲突和差异，不写数据库 |
+| POST | `/api/my/schedule-import/confirm` | 登录 | 再次校验预览数据，用完整导入结果替换本人当前学期课表并创建版本 |
+
+模板列固定为：课程名称、教师、地点、星期、开始节次、结束节次、周次、备注、颜色。确认接口不接受 `student_id`，所有者只能来自服务端会话。一次最多 200 门课程；错误、重复或冲突存在时拒绝确认。
+
+## 6. 初始化配置
 
 MVP-A 不提供管理配置 API。成员名册、学期和节次由部署初始化脚本导入；后续如确有多人在线维护需求，再单独设计受控的维护机制。
 
-## 6. 关键错误码
+## 7. 关键错误码
 
 - `ROSTER_NOT_FOUND`：姓名学号不在名册或不匹配。
 - `STUDENT_ALREADY_REGISTERED`：该成员已绑定账号。
@@ -62,3 +77,5 @@ MVP-A 不提供管理配置 API。成员名册、学期和节次由部署初始�
 - `DUPLICATE_COURSE`：完全重复课程。
 - `OUTSIDE_SEMESTER`：日期不在学期范围内。
 - `FORBIDDEN_OWNER`：试图修改他人课程。
+- `FILE_INVALID`：文件类型、大小、模板列或内容无法读取。
+- `IMPORT_INVALID`：确认数据存在错误、重复、冲突或学期已经变化。

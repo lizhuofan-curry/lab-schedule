@@ -10,6 +10,7 @@ process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/sch
 
 const { db, sqlClient } = await import("@/db");
 const { migrate } = await import("drizzle-orm/postgres-js/migrator");
+const { eq } = await import("drizzle-orm");
 const { courses, courseSnapshots, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");

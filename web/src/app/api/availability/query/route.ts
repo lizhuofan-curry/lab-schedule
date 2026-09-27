@@ -8,6 +8,7 @@ const availabilitySchema = z.object({
   studentIds: z.array(z.number().int().positive()).min(1, "请至少选择一位成员。").max(100, "一次最多查询 100 位成员。"),
   minimumConsecutivePeriods: z.number().int().min(1).max(13),
   minimumMinutes: z.number().int().min(0).max(720).optional(),
+  weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   startPeriod: z.number().int().min(1).max(13).optional(),
   endPeriod: z.number().int().min(1).max(13).optional(),
 }).superRefine((value, context) => {

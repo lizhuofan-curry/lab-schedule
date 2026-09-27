@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-只实现 `docs/01-PRD.md` 定义的 MVP-A。Excel/CSV 导入、ScheduleVersion、回退、匿名公开、日期例外和通知不进入当前阶段。
+当前实现 `docs/01-PRD.md` 定义的 MVP-B：年级筛选、增强空闲检索、标准 Excel/CSV 模板导入和只读 ScheduleVersion 历史。教务系统专用解析、图片识别、版本回退、匿名公开、日期例外和通知不进入当前阶段。
 
 ## 技术栈
 
@@ -19,7 +19,7 @@
 4. 自助注册必须匹配预置实验室名册中的姓名与学号，且名册项未绑定账号。
 5. 周次写入前转成具体 `smallint[]`。
 6. 课程冲突、共同空闲和连续节次严格按 `docs/01-PRD.md` 的 BR-05 至 BR-08 实现。
-7. 网页课程 CRUD 写 AuditLog；MVP-A 不创建 ScheduleVersion。
+7. 网页课程 CRUD 写 AuditLog；只有确认整表导入创建 ScheduleVersion，单条 CRUD 不创建版本。
 
 ## 工程规则
 
