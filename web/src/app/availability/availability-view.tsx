@@ -127,7 +127,7 @@ export function AvailabilityView({ members, semester, currentUser, guest = false
         <div className="panel-heading"><div><span className="eyebrow">查询条件</span><h2>{modeCopy[mode].title}</h2><p>{modeCopy[mode].description}</p></div></div>
 
         <div className="grade-filter" aria-label="按年级筛选">
-          {(["all", "sophomore", "junior", "unknown"] as GradeFilter[]).map((item) => <button key={item} className={grade === item ? "active" : ""} onClick={() => { setGrade(item); setLoading(true); setError(""); }}>{item === "all" ? "全部" : memberGradeLabels[item]}</button>)}
+          {(["all", "sophomore", "junior", "postgraduate"] as GradeFilter[]).map((item) => <button key={item} className={grade === item ? "active" : ""} onClick={() => { setGrade(item); setLoading(true); setError(""); }}>{item === "all" ? "全部" : memberGradeLabels[item]}</button>)}
         </div>
 
         {mode === "person" && <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={personId === member.id ? "select-person selected" : "select-person"} onClick={() => { setPersonId(member.id); setLoading(true); setError(""); }}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{personId === member.id && <Check size={14} />}</i></button>)}</div>}

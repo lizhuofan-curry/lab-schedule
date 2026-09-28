@@ -59,7 +59,7 @@ export function DashboardView({ semester, periods, members, courses, statusCours
         <div className="panel-heading"><div><span className="eyebrow">真实成员目录</span><h2>选择一位同学</h2></div><span className="count-badge">{filtered.length} 人</span></div>
         <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>
         <div className="grade-filter" role="group" aria-label="按年级筛选">
-          {(["all", "sophomore", "junior"] as const).map((value) => <button key={value} className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
+          {(["all", "sophomore", "junior", "postgraduate"] as const).map((value) => <button key={value} type="button" className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
         </div>
         <div className="member-list">{filtered.map((member) => {
           const currentCourse = findCurrentCourse({ now, semester, periods, courses: statusCourses, studentId: member.id });

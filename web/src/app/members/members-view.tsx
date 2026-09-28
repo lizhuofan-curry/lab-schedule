@@ -92,7 +92,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
         <aside className="panel member-browser">
           <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>
           <div className="grade-filter" role="group" aria-label="按年级筛选">
-            {(["all", "sophomore", "junior", "unknown"] as const).map((value) => <button key={value} className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
+            {(["all", "sophomore", "junior", "postgraduate"] as const).map((value) => <button key={value} className={grade === value ? "active" : ""} onClick={() => setGrade(value)}>{value === "all" ? "全部" : memberGradeLabels[value]}</button>)}
           </div>
           <div className="member-directory-count">显示 {filteredMembers.length} / {members.length} 位成员</div>
           {filteredMembers.map((member) => (

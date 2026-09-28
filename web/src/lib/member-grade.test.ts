@@ -10,7 +10,7 @@ test("24 开头学号归为大三", () => {
   assert.equal(resolveMemberGrade("2410250973"), "junior");
 });
 
-test("未知或待补学号不静默归类", () => {
-  assert.equal(resolveMemberGrade(null), "unknown");
-  assert.equal(resolveMemberGrade("2310000000"), "unknown");
+test("其他学号或待补学号归入研究生", () => {
+  assert.equal(resolveMemberGrade(null), "postgraduate");
+  assert.equal(resolveMemberGrade("2310000000"), "postgraduate");
 });

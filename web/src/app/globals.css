@@ -733,6 +733,7 @@ body {
   .member-panel .search-box { margin: 18px 0 10px; }
   .search-box { height: 44px; }
   .grade-filter { margin-top: 12px; }
+  .grade-filter button { padding-inline: 4px; font-size: 11px; line-height: 1.25; }
   .member-panel .member-list { display: flex; gap: 8px; margin: 13px -2px 0; padding: 2px 2px 7px; overflow-x: auto; scroll-snap-type: x proximity; }
   .member-panel .member-row { flex: 0 0 min(250px, 82vw); scroll-snap-align: start; border: 1px solid var(--line); background: #fbfcfb; }
   .schedule-panel .panel-heading { align-items: flex-start; }
