@@ -1,7 +1,7 @@
 "use client";
 
 import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
-import { Plus, RefreshCw, Upload } from "lucide-react";
+import { ImagePlus, Plus, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { PageHeader } from "@/components/app-shell";
@@ -99,7 +99,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses, studentNo 
 
   return (
     <>
-      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<div className="header-action-group"><button className="button secondary" onClick={() => { setShowHenuSync((value) => !value); setError(""); }}><RefreshCw size={17} /> 河大同步</button><Link className="button secondary" href="/my-schedule/import"><Upload size={17} /> 批量导入</Link><button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button></div>} />
+      <PageHeader eyebrow="个人课表" title="我的课表" description="点击空白格添加课程，点击课程卡片进行修改。保存后，其他成员即可看到你的最新课表。" actions={<div className="header-action-group"><button className="button secondary" onClick={() => { setShowHenuSync((value) => !value); setError(""); }}><RefreshCw size={17} /> 河大同步</button><Link className="button secondary" href="/my-schedule/import"><Upload size={17} /> 批量导入</Link><Link className="button secondary" href="/my-schedule/import/image"><ImagePlus size={17} /> 图片识别</Link><button className="button primary" onClick={() => openNew()}><Plus size={17} /> 添加课程</button></div>} />
       {notice && <div className="toast" role="status">✓ {notice}</div>}
       {showHenuSync && <HenuSyncPanel defaultStudentId={studentNo} />}
       <section className="panel timetable-panel">
