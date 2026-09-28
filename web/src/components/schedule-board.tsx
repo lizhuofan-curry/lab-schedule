@@ -109,12 +109,14 @@ export function ScheduleBoard<T extends ScheduleItem>({ courses, week, periods, 
         {activeCourses.map((course) => (
           <button
             key={course.id}
+            type="button"
             className={`course-card ${courseTone(course.name)} ${course.weekday - 1 === todayIndex ? "today-course" : ""}`}
             style={{
               gridColumn: course.weekday + 1,
               gridRow: `${rowForPeriod(course.startPeriod)} / ${rowForPeriod(course.endPeriod) + 1}`,
             }}
             onClick={() => onCourseClick?.(course)}
+            aria-label={`${editable ? "编辑" : "查看"}课程：${course.name}`}
           >
             <strong>{course.name}</strong>
             <span>{course.location || "地点待定"}</span>

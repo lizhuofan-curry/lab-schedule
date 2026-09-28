@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, CalendarCheck, Clock3, Search, UserCheck, Users } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
+import { CourseDetailDialog } from "@/components/course-detail-dialog";
 import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
@@ -27,6 +28,7 @@ export function DashboardView({ semester, periods, members, courses, statusCours
   const [grade, setGrade] = useState<MemberGrade | "all">("all");
   const [selected, setSelected] = useState(selectedStudentId);
   const [now, setNow] = useState(() => new Date(currentTimeIso));
+  const [detailCourse, setDetailCourse] = useState<ScheduleCourse | null>(null);
   const refreshedForDate = useRef(statusDate);
   const filtered = members.filter((member) => (grade === "all" || member.grade === grade) && (member.name.includes(query) || (member.studentNo ?? "").includes(query)));
   const selectedMember = members.find((member) => member.id === selected) ?? members[0];
@@ -61,14 +63,15 @@ export function DashboardView({ semester, periods, members, courses, statusCours
         </div>
         <div className="member-list">{filtered.map((member) => {
           const currentCourse = findCurrentCourse({ now, semester, periods, courses: statusCourses, studentId: member.id });
-          return <button key={member.id} className={selected === member.id ? "member-row selected" : "member-row"} onClick={() => setSelected(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span className="member-copy"><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><span className={currentCourse ? "status-dot busy" : "status-dot free"} title={currentCourse ? `正在上：${currentCourse.name}` : "当前时间没有课程"}>{currentCourse ? "有课" : "空闲"}</span></button>;
+          return <button key={member.id} className={selected === member.id ? "member-row selected" : "member-row"} onClick={() => { setSelected(member.id); setDetailCourse(null); }}><span className="avatar">{member.name.slice(-1)}</span><span className="member-copy"><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><span className={currentCourse ? "status-dot busy" : "status-dot free"} title={currentCourse ? `正在上：${currentCourse.name}` : "当前时间没有课程"}>{currentCourse ? "有课" : "空闲"}</span></button>;
         })}</div>
       </section>
       <section className="panel schedule-panel">
         <div className="panel-heading"><div><span className="eyebrow">第 {week} 周课表</span><h2>{selectedMember?.name ?? "暂无成员"}的课表</h2></div><Link className="text-link" href="/members">查看详情 <ArrowRight size={16} /></Link></div>
-        <ScheduleBoard courses={selectedCourses} week={week} periods={periods} semesterStartDate={semester.startDate} compact />
+        <ScheduleBoard courses={selectedCourses} week={week} periods={periods} semesterStartDate={semester.startDate} compact onCourseClick={setDetailCourse} />
       </section>
     </div>
     <section className="callout"><div><span className="eyebrow light">需要安排多人会议？</span><h2>一次找到所有人的共同空闲</h2><p>系统会从数据库读取所选成员在指定日期真正生效的课程。</p></div><Link href="/availability" className="button light">开始查询 <ArrowRight size={17} /></Link></section>
+    <CourseDetailDialog course={detailCourse} periods={periods} memberName={selectedMember?.name} onClose={() => setDetailCourse(null)} />
   </AppShell>;
 }

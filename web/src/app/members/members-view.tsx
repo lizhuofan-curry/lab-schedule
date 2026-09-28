@@ -3,6 +3,7 @@
 import { Search, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { CourseDetailDialog } from "@/components/course-detail-dialog";
 import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { ScheduleMember } from "@/lib/schedule-service";
@@ -32,6 +33,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
   const [courses, setCourses] = useState(initialCourses);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [detailCourse, setDetailCourse] = useState<ScheduleCourse | null>(null);
   const firstLoad = useRef(true);
 
   const selectedMember = members.find((member) => member.id === selectedId) ?? null;
@@ -72,6 +74,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
     setLoading(true);
     setError("");
     setSelectedId(id);
+    setDetailCourse(null);
   }
 
   function changeWeek(nextWeek: number) {
@@ -79,6 +82,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
     setLoading(true);
     setError("");
     setWeek(nextWeek);
+    setDetailCourse(null);
   }
 
   return (
@@ -109,7 +113,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
               </div>
               {error && <div className="form-error member-schedule-error" role="alert">{error}</div>}
               <div className={loading ? "schedule-loading" : ""} aria-busy={loading}>
-                <ScheduleBoard week={week} courses={courses} periods={periods} semesterStartDate={semester.startDate} />
+                <ScheduleBoard week={week} courses={courses} periods={periods} semesterStartDate={semester.startDate} onCourseClick={setDetailCourse} />
                 {!loading && courses.length === 0 && <div className="schedule-empty-note">本周暂无课程</div>}
               </div>
             </>
@@ -118,6 +122,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
           )}
         </section>
       </div>
+      <CourseDetailDialog course={detailCourse} periods={periods} memberName={selectedMember?.name} onClose={() => setDetailCourse(null)} />
     </>
   );
 }
