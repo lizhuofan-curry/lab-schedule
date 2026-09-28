@@ -1,11 +1,11 @@
 import "server-only";
 
 import { and, arrayContains, asc, eq, ilike, inArray, or } from "drizzle-orm";
-import { format } from "date-fns";
 import { db } from "@/db";
 import { courses, periods, semesters, students } from "@/db/schema";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import { calculateAvailability, resolveTeachingDate } from "@/lib/availability-types";
+import { getShanghaiClock } from "@/lib/current-course-status";
 import { resolveMemberGrade, type MemberGrade } from "@/lib/member-grade";
 
 export type PersonalSchedule = {
@@ -104,7 +104,8 @@ export async function getDashboardData(studentId: number, requestedWeek?: number
   const config = await getCurrentScheduleConfig();
   if (!config) return null;
   const members = (await getMemberDirectory()).filter((member) => member.registered);
-  const today = format(new Date(), "yyyy-MM-dd");
+  const now = new Date();
+  const today = getShanghaiClock(now).date;
   const todayInfo = resolveTeachingDate(today, config.semester);
   const fallbackWeek = todayInfo?.week ?? 1;
   const week = requestedWeek && requestedWeek >= 1 && requestedWeek <= config.semester.weekCount ? requestedWeek : fallbackWeek;
@@ -128,15 +129,27 @@ export async function getDashboardData(studentId: number, requestedWeek?: number
       courseRows.filter((course) => course.weekday === weekday),
       2,
     ).ranges.length, 0);
-  const todayWeekday = todayInfo?.week === week ? todayInfo.weekday : null;
-  const todayFreeCount = todayWeekday === null ? 0 : memberIds.filter((id) => !courseRows.some((course) => course.studentId === id && course.weekday === todayWeekday)).length;
+  const statusCourseRows = !todayInfo || todayInfo.week === week ? courseRows : await db.select({
+    id: courses.id, studentId: courses.studentId, semesterId: courses.semesterId, name: courses.name,
+    teacher: courses.teacher, location: courses.location, weekday: courses.weekday,
+    startPeriod: courses.startPeriod, endPeriod: courses.endPeriod, weeks: courses.weeks,
+    note: courses.note, color: courses.color,
+  }).from(courses).where(and(
+    inArray(courses.studentId, memberIds),
+    eq(courses.semesterId, config.semester.id),
+    arrayContains(courses.weeks, [todayInfo.week]),
+  )).orderBy(asc(courses.weekday), asc(courses.startPeriod));
+  const todayFreeCount = !todayInfo ? 0 : memberIds.filter((id) => !statusCourseRows.some((course) => course.studentId === id && course.weekday === todayInfo.weekday)).length;
 
   return {
     ...config,
     members,
     courses: courseRows.map((course) => ({ ...course, weeks: course.weeks.map(Number) })),
+    statusCourses: statusCourseRows.map((course) => ({ ...course, weeks: course.weeks.map(Number) })),
+    statusDate: today,
+    currentTimeIso: now.toISOString(),
     week,
     selectedStudentId: members.some((member) => member.id === studentId) ? studentId : members[0]?.id ?? null,
-    stats: { registered: members.length, todayFree: todayFreeCount, commonRangeCount, todayIsSelectedWeek: todayWeekday !== null },
+    stats: { registered: members.length, todayFree: todayFreeCount, commonRangeCount, todayInSemester: todayInfo !== null },
   };
 }

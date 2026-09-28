@@ -99,6 +99,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .page-header h1 { margin: 0; font-size: clamp(34px, 3.2vw, 50px); letter-spacing: -.045em; line-height: 1.12; text-wrap: balance; }
 .page-header p { margin: 14px 0 0; color: var(--ink-soft); font-size: 16px; line-height: 1.75; max-width: 720px; text-wrap: pretty; }
 .page-actions { flex: 0 0 auto; }
+.dashboard-header-actions { display: flex; align-items: stretch; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.live-clock { min-width: 220px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 14px; background: white; color: var(--forest-2); display: flex; align-items: center; gap: 10px; }
+.live-clock span { display: grid; gap: 2px; }
+.live-clock small { color: #75827c; font-size: 10px; }
+.live-clock strong { color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .header-action-group { display: flex; gap: 9px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 9px 30px rgba(22,52,43,.035); }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
@@ -454,6 +459,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .image-drop strong { color: var(--ink); }
 .image-drop span { color: #718078; font-size: 12px; }
 .image-drop.has-image { padding: 0; background: #12201b; border-style: solid; }
+.image-drop.dragging { border-color: var(--forest); background: #dcebe4; box-shadow: 0 0 0 4px rgb(32 93 71 / 12%); transform: translateY(-2px); }
 .image-drop img { width: 100%; max-height: 520px; object-fit: contain; display: block; }
 .selected-image-meta { display: flex; justify-content: space-between; gap: 12px; color: #738079; font-size: 12px; }
 .selected-image-meta strong { max-width: 75%; overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }

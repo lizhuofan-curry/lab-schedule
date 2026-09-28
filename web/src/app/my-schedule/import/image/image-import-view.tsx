@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent } from "react";
 import { AlertTriangle, ArrowLeft, Check, History, ImagePlus, Plus, ScanLine, Trash2 } from "lucide-react";
 import type { CourseInput } from "@/lib/course-schema";
 import { draftsFromOcrLines, type ImageCourseDraft, type OcrTextLine } from "@/lib/image-ocr";
@@ -19,6 +19,10 @@ type Preview = {
 };
 
 type RecognitionMode = "local" | "vision";
+const maximumImageBytes = 8 * 1024 * 1024;
+const acceptedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const imageTypeByExtension: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
+
 type OcrResult = {
   fileName: string;
   confidence: number;
@@ -50,13 +54,65 @@ export function ImageImportView() {
   const [notice, setNotice] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [success, setSuccess] = useState<{ versionNo: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl); }, [imageUrl]);
 
-  function selectFile(next: File | null) {
+  const selectFile = useCallback((next: File | null) => {
+    setIsDragging(false);
+    if (next) {
+      const extension = next.name.split(".").pop()?.toLowerCase() ?? "";
+      const inferredType = next.type || imageTypeByExtension[extension] || "";
+      if (!acceptedImageTypes.has(inferredType)) {
+        setError("只支持 PNG、JPG 或 WebP 图片。请在微信中打开原图后重新拖入，或先保存图片再选择。");
+        return;
+      }
+      if (next.size > maximumImageBytes) {
+        setError("图片不能超过 8 MB。请裁剪课表区域或压缩图片后重试。");
+        return;
+      }
+      if (!next.type) next = new File([next], next.name, { type: inferredType, lastModified: next.lastModified });
+    }
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     setFile(next); setImageUrl(next ? URL.createObjectURL(next) : "");
     setOcr(null); setDrafts([]); setPreview(null); setError(""); setNotice(""); setSuccess(null);
+  }, [imageUrl]);
+
+  useEffect(() => {
+    function handleWindowPaste(event: ClipboardEvent) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable='true']")) return;
+      const pastedFile = Array.from(event.clipboardData?.items ?? [])
+        .find((item) => item.kind === "file" && item.type.startsWith("image/"))
+        ?.getAsFile() ?? null;
+      if (!pastedFile) return;
+      event.preventDefault();
+      selectFile(pastedFile);
+    }
+    window.addEventListener("paste", handleWindowPaste);
+    return () => window.removeEventListener("paste", handleWindowPaste);
+  }, [selectFile]);
+
+  function handleDrop(event: ReactDragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const droppedFile = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/"))
+      ?? Array.from(event.dataTransfer.items).find((item) => item.kind === "file")?.getAsFile()
+      ?? null;
+    if (!droppedFile) {
+      setIsDragging(false);
+      setError("没有从拖放内容中读取到图片文件。部分微信版本只提供图片预览，请复制图片后在此按 Ctrl+V，或先把原图保存到电脑。");
+      return;
+    }
+    selectFile(droppedFile);
+  }
+
+  function handlePaste(event: ReactClipboardEvent<HTMLButtonElement>) {
+    const pastedFile = Array.from(event.clipboardData.items)
+      .find((item) => item.kind === "file" && item.type.startsWith("image/"))
+      ?.getAsFile() ?? null;
+    if (!pastedFile) return;
+    event.preventDefault();
+    selectFile(pastedFile);
   }
 
   async function recognize() {
@@ -131,8 +187,8 @@ export function ImageImportView() {
       <aside className="panel image-source-panel">
         <div><span className="eyebrow">第 1 步</span><h2>上传并识别</h2><p>建议使用原图，裁掉状态栏和底部导航，只保留完整课表网格。</p></div>
         <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} />
-        <button type="button" className={`image-drop ${imageUrl ? "has-image" : ""}`} onClick={() => inputRef.current?.click()}>
-          {imageUrl ? <Image src={imageUrl} alt="待识别课表预览" width={720} height={960} unoptimized /> : <><ImagePlus size={34} /><strong>选择课表截图</strong><span>PNG / JPG / WebP，最大 8 MB</span></>}
+        <button type="button" className={`image-drop ${imageUrl ? "has-image" : ""} ${isDragging ? "dragging" : ""}`} onClick={() => inputRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsDragging(true); }} onDragLeave={(event) => { const nextTarget = event.relatedTarget; if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setIsDragging(false); }} onDrop={handleDrop} onPaste={handlePaste}>
+          {imageUrl ? <Image src={imageUrl} alt="待识别课表预览" width={720} height={960} unoptimized draggable={false} /> : <><ImagePlus size={34} /><strong>{isDragging ? "松开鼠标即可添加" : "拖入或点击选择课表截图"}</strong><span>也可复制图片后按 Ctrl+V</span><span>PNG / JPG / WebP，最大 8 MB</span></>}
         </button>
         {file && <div className="selected-image-meta"><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(2)} MB</span></div>}
         <div className="recognition-mode" role="radiogroup" aria-label="识别方式">
