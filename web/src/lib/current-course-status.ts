@@ -39,6 +39,13 @@ export function getShanghaiClock(now: Date) {
   };
 }
 
+export function getDefaultScheduleWeek(now: Date, semester: ScheduleSemester) {
+  const today = getShanghaiClock(now).date;
+  const teachingDate = resolveTeachingDate(today, semester);
+  if (teachingDate) return teachingDate.week;
+  return today < semester.startDate ? 1 : semester.weekCount;
+}
+
 export function findCurrentCourse({
   now,
   semester,

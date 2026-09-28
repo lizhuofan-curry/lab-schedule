@@ -1,6 +1,5 @@
 "use client";
 
-import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
 import { ImagePlus, Plus, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -11,18 +10,14 @@ import { WeekSwitcher } from "@/components/week-switcher";
 import type { CourseInput } from "@/lib/course-schema";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import { HenuSyncPanel } from "./henu-sync-panel";
-
-function getCurrentWeek(startDate: string, weekCount: number) {
-  const elapsedDays = differenceInCalendarDays(startOfDay(new Date()), parseISO(startDate));
-  return Math.min(weekCount, Math.max(1, Math.floor(elapsedDays / 7) + 1));
-}
+import { getDefaultScheduleWeek } from "@/lib/current-course-status";
 
 function normalizeCourse(value: ScheduleCourse): ScheduleCourse {
   return { ...value, weeks: value.weeks.map(Number) };
 }
 
 export function MyScheduleEditor({ semester, periods, initialCourses, studentNo }: { semester: ScheduleSemester; periods: SchedulePeriod[]; initialCourses: ScheduleCourse[]; studentNo: string }) {
-  const [week, setWeek] = useState(() => getCurrentWeek(semester.startDate, semester.weekCount));
+  const [week, setWeek] = useState(() => getDefaultScheduleWeek(new Date(), semester));
   const [courseItems, setCourseItems] = useState(initialCourses);
   const [editing, setEditing] = useState<ScheduleCourse | null>(null);
   const [slot, setSlot] = useState<{ weekday: number; period: number } | null>(null);

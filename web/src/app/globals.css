@@ -159,16 +159,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .schedule-day { grid-row: 1; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f8faf9; }
 .schedule-day span { font-weight: 750; font-size: 14px; }
 .schedule-day small { color: #78857f; font-size: 11px; }
+.schedule-day.today { position: relative; background: var(--forest); color: white; box-shadow: inset 0 -3px 0 #d9a64b; }
+.schedule-day.today span { font-weight: 850; }
+.schedule-day.today small { color: #d9e7e2; font-weight: 700; }
 .period-label { grid-column: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fbfcfb; }
 .period-label strong { font-size: 16px; }
 .period-label small { color: #78857f; font-size: 10px; margin-top: 5px; }
 .schedule-cell { border-left: 0; border-top: 0; background: white; position: relative; cursor: default; }
+.schedule-cell.today-column { background: #f1f7f4; }
 .schedule-cell.editable { cursor: pointer; }
-.schedule-cell.editable:hover { background: #f1f6f3; }
+.schedule-cell.editable:hover { background: #e7f1ec; }
 .cell-plus { position: absolute; opacity: 0; inset: 50% auto auto 50%; transform: translate(-50%, -50%); color: var(--forest-2); }
 .schedule-cell.editable:hover .cell-plus, .schedule-cell.editable:focus .cell-plus { opacity: 1; }
 .course-card { z-index: 2; margin: 5px; border: 0; border-left: 4px solid rgba(23,63,52,.45); border-radius: 9px; padding: 10px; text-align: left; overflow: hidden; cursor: pointer; box-shadow: 0 3px 9px rgba(23,45,38,.07); transition: transform .15s ease, box-shadow .15s ease; }
 .course-card:hover { transform: translateY(-1px); box-shadow: 0 7px 15px rgba(23,45,38,.12); }
+.course-card.today-course { outline: 2px solid rgba(23,63,52,.34); outline-offset: -2px; box-shadow: 0 5px 14px rgba(23,63,52,.16); }
 .course-card strong, .course-card span, .course-card small { display: block; }
 .course-card strong { font-size: 13px; line-height: 1.35; }
 .course-card span { margin-top: 5px; font-size: 11px; color: #47534f; }

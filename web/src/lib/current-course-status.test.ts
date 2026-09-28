@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findCurrentCourse, getShanghaiClock, type MemberCourse } from "./current-course-status.ts";
+import { findCurrentCourse, getDefaultScheduleWeek, getShanghaiClock, type MemberCourse } from "./current-course-status.ts";
 
 const semester = { id: 1, name: "测试学期", startDate: "2026-08-31", endDate: "2027-01-03", weekCount: 18 };
 const periods = [
@@ -23,4 +23,10 @@ test("只有当前周次、星期和上课时间同时匹配才显示有课", ()
   assert.equal(findCurrentCourse({ now: new Date("2026-09-28T00:30:00.000Z"), semester, periods, courses: [course], studentId: 24 })?.name, "计算机网络");
   assert.equal(findCurrentCourse({ now: new Date("2026-09-28T02:00:00.000Z"), semester, periods, courses: [course], studentId: 24 }), null);
   assert.equal(findCurrentCourse({ now: new Date("2026-09-29T00:30:00.000Z"), semester, periods, courses: [course], studentId: 24 }), null);
+});
+
+test("课表默认定位当前教学周，学期外定位首周或末周", () => {
+  assert.equal(getDefaultScheduleWeek(new Date("2026-09-28T08:00:00.000Z"), semester), 5);
+  assert.equal(getDefaultScheduleWeek(new Date("2026-08-01T08:00:00.000Z"), semester), 1);
+  assert.equal(getDefaultScheduleWeek(new Date("2027-02-01T08:00:00.000Z"), semester), 18);
 });
