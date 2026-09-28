@@ -261,12 +261,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .import-guide h2, .import-workspace h2 { margin: 5px 0 10px; font-size: 22px; }
 .import-guide > p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.75; }
 .import-source-switch { display: grid; gap: 10px; margin: 18px 0; }
-.import-source-switch button { width: 100%; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink-soft); display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
-.import-source-switch button:hover { transform: translateY(-1px); border-color: #8aafa1; }
+.import-source-switch button, .import-source-switch a { width: 100%; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink-soft); display: flex; align-items: center; gap: 12px; text-align: left; text-decoration: none; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.import-source-switch button:hover, .import-source-switch a:hover { transform: translateY(-1px); border-color: #8aafa1; }
 .import-source-switch button.active { border-color: var(--forest); background: #edf4f1; color: var(--forest); box-shadow: inset 3px 0 0 var(--forest); }
-.import-source-switch button span, .import-source-switch button strong, .import-source-switch button small { display: block; }
-.import-source-switch button strong { color: var(--ink); font-size: 14px; }
-.import-source-switch button small { margin-top: 3px; color: #74817b; font-size: 12px; }
+.import-source-switch button span, .import-source-switch button strong, .import-source-switch button small, .import-source-switch a span, .import-source-switch a strong, .import-source-switch a small { display: block; }
+.import-source-switch button strong, .import-source-switch a strong { color: var(--ink); font-size: 14px; }
+.import-source-switch button small, .import-source-switch a small { margin-top: 3px; color: #74817b; font-size: 12px; }
 .paste-example { margin: 14px 0; padding: 12px 14px; border-radius: 12px; background: #f3f7f5; }
 .paste-example span { display: block; margin-bottom: 5px; color: #74817b; font-size: 11px; }
 .paste-example code { color: var(--forest); font-size: 12px; white-space: normal; }

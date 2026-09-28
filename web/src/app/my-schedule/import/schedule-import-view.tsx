@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { AlertTriangle, Check, ClipboardPaste, Download, FileSpreadsheet, History, Upload } from "lucide-react";
+import { AlertTriangle, Check, ClipboardPaste, Download, FileSpreadsheet, History, ImagePlus, Upload } from "lucide-react";
 import type { CourseInput } from "@/lib/course-schema";
 import type { ImportPreviewRow } from "@/lib/schedule-import";
 
@@ -83,6 +83,7 @@ export function ScheduleImportView() {
       <div className="import-source-switch" role="tablist" aria-label="课表来源">
         <button type="button" role="tab" aria-selected={mode === "file"} className={mode === "file" ? "active" : ""} onClick={() => changeMode("file")}><FileSpreadsheet size={20} /><span><strong>上传标准模板</strong><small>适合整理好的 Excel / CSV</small></span></button>
         <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "active" : ""} onClick={() => changeMode("text")}><ClipboardPaste size={20} /><span><strong>粘贴教务表格</strong><small>从网页或 Excel 直接复制</small></span></button>
+        <Link href="/my-schedule/import/image" className="import-source-link"><ImagePlus size={20} /><span><strong>识别课表图片</strong><small>本地 OCR 或千问智能识别</small></span></Link>
       </div>
       {mode === "file" ? <><p>每行填写一门课程。周次可写 <strong>1-18</strong>、<strong>1-18单</strong>、<strong>2,4,6</strong>；星期可写“周一”或数字 1-7。</p>
       <div className="template-actions"><a className="button secondary" href="/api/my/schedule-import/template?format=xlsx"><Download size={17} /> Excel 模板</a><a className="button secondary" href="/api/my/schedule-import/template?format=csv"><Download size={17} /> CSV 模板</a></div></> : <><p>复制时请包含表头。支持“课程、教师、周次、星期、节次、地点”，也支持教务结果中的“上课时间/上课地点”组合列。</p><div className="paste-example"><span>可识别示例</span><code>1-18周 五[3-5] 金明综合楼6101</code></div></>}
