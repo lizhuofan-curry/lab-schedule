@@ -5,6 +5,8 @@ import { ArrowRight, CalendarDays, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { BciLogo } from "@/components/bci-logo";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -38,15 +40,16 @@ export default function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-story">
-        <Link href="/" className="auth-brand"><span className="brand-mark">同</span><strong>同频课表</strong></Link>
+        <Link href="/" className="auth-brand"><span className="brand-mark"><BciLogo /></span><strong>同频课表</strong></Link>
         <div className="story-copy">
-          <span className="eyebrow light">实验室时间协作</span>
+          <span className="eyebrow light">BCI实验室时间协作</span>
           <h1>不再在群里<br />反复问“谁有空”。</h1>
           <p>看课表、找没课的同学、约共同时间，都在一个清楚的页面里完成。</p>
         </div>
         <MiniBoard />
       </section>
       <section className="auth-form-side">
+        <ThemeSwitcher compact />
         <form className="auth-form" method="post" onSubmit={handleSubmit}>
           <div><span className="eyebrow">欢迎回来</span><h2>登录实验室课表</h2><p>使用你的学号和密码登录。</p></div>
           <label className="field"><span>学号</span><input name="studentNo" autoComplete="username" required placeholder="请输入学号" /></label>

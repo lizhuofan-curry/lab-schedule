@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, Clock3, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, X } from "lucide-react";
 import { useState } from "react";
+import { BciLogo } from "@/components/bci-logo";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const navigation = [
   { href: "/dashboard", label: "课表总览", icon: LayoutDashboard },
@@ -20,7 +22,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
   return (
     <div className="app-frame">
       <header className="mobile-header">
-        <Link href="/dashboard" className="brand-mark" aria-label="同频课表首页">同</Link>
+        <Link href="/dashboard" className="brand-mark" aria-label="同频课表首页"><BciLogo /></Link>
         <span className="mobile-brand-title">同频课表</span>
         <button className="icon-button" onClick={() => setOpen((value) => !value)} aria-label={open ? "关闭账户菜单" : "打开账户菜单"}>
           {open ? <X size={21} /> : <Menu size={21} />}
@@ -29,10 +31,10 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
 
       <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark">同</div>
+          <div className="brand-mark"><BciLogo /></div>
           <div>
             <strong>同频课表</strong>
-            <small>实验室时间协作</small>
+            <small>BCI实验室时间协作</small>
           </div>
         </div>
 
@@ -48,6 +50,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
           })}
         </nav>
 
+        <ThemeSwitcher />
         <div className="sidebar-footer">
           <div className="current-user">
             <div className="avatar">{currentUser.name.slice(0, 1)}</div>

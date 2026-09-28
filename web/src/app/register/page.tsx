@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function RegisterPage() {
         <div className="register-notes"><p><CheckCircle2 size={19} /> 所有成员可以互相查看课表</p><p><ShieldCheck size={19} /> 只有你可以修改自己的课程</p></div>
       </section>
       <section className="auth-form-side">
+        <ThemeSwitcher compact />
         <form className="auth-form" method="post" onSubmit={handleSubmit}>
           <div><span className="eyebrow">创建账号</span><h2>注册实验室课表</h2><p>请使用实验室名册中的姓名和学号。</p></div>
           <label className="field"><span>姓名</span><input name="name" required autoComplete="name" placeholder="请输入真实姓名" /></label>
