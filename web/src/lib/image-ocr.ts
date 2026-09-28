@@ -1,4 +1,4 @@
-import type { ImportRecord } from "./schedule-import.ts";
+import type { ImportHeader, ImportRecord } from "./schedule-import.ts";
 
 export type OcrTextLine = {
   text: string;
@@ -10,6 +10,7 @@ export type ImageCourseDraft = {
   id: string;
   sourceText: string;
   confidence: number;
+  reviewFields?: ImportHeader[];
   record: ImportRecord;
 };
 

@@ -18,6 +18,10 @@
 - `BETTER_AUTH_TRUSTED_ORIGINS`：允许登录请求的正式来源，通常与 `APP_URL` 相同。
 - `POSTGRES_PASSWORD`：数据库随机强密码。
 - `BETTER_AUTH_SECRET`：至少 32 字节的随机登录密钥。
+- `SCHEDULE_VISION_PROVIDER`：可选智能识别提供方，当前填写 `qwen`；留空时仍可使用本地 OCR。
+- `SCHEDULE_VISION_MODEL`：千问多模态模型 ID，例如 `qwen3.8-flash`。
+- `DASHSCOPE_API_KEY`：标准 API Key，只在服务端和应用容器中使用，不得提交或写入日志。
+- `DASHSCOPE_BASE_URL`：与 Key 所属工作空间及地域一致的 OpenAI 兼容地址，包含 `/compatible-mode/v1`。
 
 可以在服务器执行 `openssl rand -hex 32` 分别生成两个不同的随机值。系统不设置管理员账号。`.env` 不进入 Git，不粘贴到聊天、截图或提交记录中。
 

@@ -463,6 +463,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .ocr-score strong { color: var(--forest); font-size: 21px; }
 .ocr-score small { grid-column: 1 / -1; color: #67766f; font-size: 11px; }
 .ocr-score.low, .ocr-draft-card-head small.low { background: #fff0e9; color: #a44629; }
+.recognition-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.recognition-mode button { display: grid; gap: 3px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+.recognition-mode button strong { font-size: 12px; }
+.recognition-mode button span { color: #6c7a74; font-size: 10px; line-height: 1.45; }
+.recognition-mode button.active { border-color: var(--forest); background: #e8f2ed; box-shadow: 0 0 0 3px rgb(32 93 71 / 8%); }
+.vision-consent { display: flex; align-items: flex-start; gap: 8px; padding: 11px 12px; border-radius: 11px; background: #fff7e8; color: #725728; font-size: 11px; line-height: 1.55; }
+.vision-consent input { margin-top: 2px; }
 .image-draft-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
 .draft-count, .privacy-chip { padding: 7px 10px; border-radius: 999px; background: #e7f1ec; color: #27644e; font-size: 11px; font-weight: 800; }
 .image-empty-state { min-height: 380px; color: #78857f; display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; }
@@ -473,6 +480,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .ocr-raw-text summary { color: var(--forest); font-size: 12px; font-weight: 800; cursor: pointer; }
 .ocr-raw-text pre { max-height: 240px; overflow: auto; margin: 12px 0 0; color: #64726c; font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
 .ocr-draft-card { padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: #fbfcfb; }
+.ocr-draft-card.needs-review { border-color: #dc9a7f; }
 .ocr-draft-card-head { display: flex; justify-content: space-between; gap: 12px; }
 .ocr-draft-card-head > div { display: flex; align-items: center; gap: 9px; }
 .ocr-draft-card-head span { color: var(--forest); font-size: 12px; font-weight: 850; }
@@ -503,3 +511,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 480px) { .ocr-fields { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .recognition-mode { grid-template-columns: 1fr; } }

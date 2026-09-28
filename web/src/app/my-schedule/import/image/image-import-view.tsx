@@ -18,7 +18,16 @@ type Preview = {
   diff: { added: number; unchanged: number; removed: number };
 };
 
-type OcrResult = { fileName: string; confidence: number; text: string; lines: OcrTextLine[] };
+type RecognitionMode = "local" | "vision";
+type OcrResult = {
+  fileName: string;
+  confidence: number;
+  text: string;
+  lines: OcrTextLine[];
+  mode: RecognitionMode;
+  model?: string;
+  drafts?: ImageCourseDraft[];
+};
 function emptyRecord(): ImportRecord {
   return Object.fromEntries(importHeaders.map((header) => [header, header === "颜色" ? "#dce8e3" : ""])) as ImportRecord;
 }
@@ -32,6 +41,8 @@ export function ImageImportView() {
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [ocr, setOcr] = useState<OcrResult | null>(null);
+  const [recognitionMode, setRecognitionMode] = useState<RecognitionMode>("local");
+  const [visionConsent, setVisionConsent] = useState(false);
   const [drafts, setDrafts] = useState<ImageCourseDraft[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState<"ocr" | "preview" | "confirm" | "">("");
@@ -50,18 +61,22 @@ export function ImageImportView() {
 
   async function recognize() {
     if (!file) return setError("请先选择一张课表截图。");
+    if (recognitionMode === "vision" && !visionConsent) return setError("请先勾选同意，将本次图片发送给千问模型进行识别。");
     setLoading("ocr"); setError(""); setNotice(""); setPreview(null); setSuccess(null);
     try {
-      const form = new FormData(); form.append("file", file);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("mode", recognitionMode);
+      if (recognitionMode === "vision") form.append("visionConsent", "true");
       const response = await fetch("/api/my/schedule-import/image-ocr", { method: "POST", body: form });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message ?? "图片识别失败。");
       const result = payload.data as OcrResult;
-      const suggestions = draftsFromOcrLines(result.lines);
+      const suggestions = result.drafts?.length ? result.drafts : draftsFromOcrLines(result.lines);
       setOcr(result);
       setDrafts(suggestions.length ? suggestions : [newDraft(0)]);
       setNotice(suggestions.length
-        ? `已生成 ${suggestions.length} 条候选。OCR 只负责初步填写，请删除无关行并补全标红字段。`
+        ? `${result.mode === "vision" ? `智能识别（${result.model ?? "千问"}）` : "本地 OCR"}已生成 ${suggestions.length} 条候选。请删除无关行并重点核对标红字段。`
         : "识别到了文字，但没有可靠课程候选。已创建一行空白草稿，请参考左侧图片填写。");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "图片识别失败。"); }
     finally { setLoading(""); }
@@ -69,7 +84,7 @@ export function ImageImportView() {
 
   function updateRecord(index: number, field: ImportHeader, value: string) {
     setDrafts((current) => current.map((draft, draftIndex) => draftIndex === index
-      ? { ...draft, record: { ...draft.record, [field]: value } }
+      ? { ...draft, reviewFields: draft.reviewFields?.filter((item) => item !== field), record: { ...draft.record, [field]: value } }
       : draft));
     setPreview(null); setAcknowledged(false); setSuccess(null);
   }
@@ -120,7 +135,12 @@ export function ImageImportView() {
           {imageUrl ? <Image src={imageUrl} alt="待识别课表预览" width={720} height={960} unoptimized /> : <><ImagePlus size={34} /><strong>选择课表截图</strong><span>PNG / JPG / WebP，最大 8 MB</span></>}
         </button>
         {file && <div className="selected-image-meta"><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(2)} MB</span></div>}
-        <button type="button" className="button primary image-recognize-button" disabled={!file || Boolean(loading)} onClick={recognize}><ScanLine size={17} />{loading === "ocr" ? "正在本地识别，可能需要几十秒…" : "开始识别图片"}</button>
+        <div className="recognition-mode" role="radiogroup" aria-label="识别方式">
+          <button type="button" role="radio" aria-checked={recognitionMode === "local"} className={recognitionMode === "local" ? "active" : ""} onClick={() => { setRecognitionMode("local"); setError(""); }}><strong>仅本地 OCR</strong><span>图片不离开本机，适合清晰截图</span></button>
+          <button type="button" role="radio" aria-checked={recognitionMode === "vision"} className={recognitionMode === "vision" ? "active" : ""} onClick={() => { setRecognitionMode("vision"); setError(""); }}><strong>千问智能识别</strong><span>更擅长理解课表网格和课程位置</span></button>
+        </div>
+        {recognitionMode === "vision" && <label className="vision-consent"><input type="checkbox" checked={visionConsent} onChange={(event) => setVisionConsent(event.target.checked)} /><span>我同意将本次课表图片临时发送给千问模型处理。图片和识别原文不会由本站保存。</span></label>}
+        <button type="button" className="button primary image-recognize-button" disabled={!file || Boolean(loading)} onClick={recognize}><ScanLine size={17} />{loading === "ocr" ? `正在${recognitionMode === "vision" ? "智能" : "本地"}识别，可能需要几十秒…` : `开始${recognitionMode === "vision" ? "智能" : "本地"}识别`}</button>
         {ocr && <div className={`ocr-score ${ocr.confidence < 70 ? "low" : ""}`}><span>整体文字置信度</span><strong>{ocr.confidence}%</strong><small>{ocr.confidence < 70 ? "图片较难识别，请重点核对每一项" : "仍需人工核对星期、节次和周次"}</small></div>}
       </aside>
 
@@ -130,17 +150,17 @@ export function ImageImportView() {
           {notice && <div className="import-warning"><AlertTriangle size={18} /><span>{notice}</span></div>}
           <details className="ocr-raw-text"><summary>查看 OCR 识别原文</summary><pre>{ocr.text}</pre></details>
           <div className="ocr-draft-list">
-            {drafts.map((draft, index) => <article className="ocr-draft-card" key={draft.id}>
+            {drafts.map((draft, index) => <article className={`ocr-draft-card ${draft.reviewFields?.length ? "needs-review" : ""}`} key={draft.id}>
               <div className="ocr-draft-card-head"><div><span>候选 {index + 1}</span><small className={draft.confidence < 70 ? "low" : ""}>文字置信度 {draft.confidence}%</small></div><button type="button" aria-label={`删除候选 ${index + 1}`} onClick={() => { setDrafts((items) => items.filter((_, i) => i !== index)); setPreview(null); }}><Trash2 size={16} /></button></div>
               <p className="ocr-source-text" title={draft.sourceText}>{draft.sourceText}</p>
               <div className="ocr-fields">
-                <label className={!draft.record["课程名称"].trim() ? "needs-review" : ""}><span>课程名称 *</span><input value={draft.record["课程名称"]} onChange={(e) => updateRecord(index, "课程名称", e.target.value)} /></label>
-                <label><span>教师</span><input value={draft.record["教师"]} onChange={(e) => updateRecord(index, "教师", e.target.value)} /></label>
-                <label><span>地点</span><input value={draft.record["地点"]} onChange={(e) => updateRecord(index, "地点", e.target.value)} /></label>
-                <label className={!draft.record["星期"].trim() ? "needs-review" : ""}><span>星期 *</span><select value={draft.record["星期"]} onChange={(e) => updateRecord(index, "星期", e.target.value)}><option value="">请选择</option>{["一","二","三","四","五","六","日"].map((day) => <option key={day} value={`周${day}`}>周{day}</option>)}</select></label>
-                <label className={!draft.record["开始节次"].trim() ? "needs-review" : ""}><span>开始节次 *</span><select value={draft.record["开始节次"]} onChange={(e) => updateRecord(index, "开始节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
-                <label className={!draft.record["结束节次"].trim() ? "needs-review" : ""}><span>结束节次 *</span><select value={draft.record["结束节次"]} onChange={(e) => updateRecord(index, "结束节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
-                <label className={!draft.record["周次"].trim() ? "needs-review" : ""}><span>周次 *</span><input placeholder="例如 1-18 或 1-18单" value={draft.record["周次"]} onChange={(e) => updateRecord(index, "周次", e.target.value)} /></label>
+                <label className={!draft.record["课程名称"].trim() || draft.reviewFields?.includes("课程名称") ? "needs-review" : ""}><span>课程名称 *</span><input value={draft.record["课程名称"]} onChange={(e) => updateRecord(index, "课程名称", e.target.value)} /></label>
+                <label className={draft.reviewFields?.includes("教师") ? "needs-review" : ""}><span>教师</span><input value={draft.record["教师"]} onChange={(e) => updateRecord(index, "教师", e.target.value)} /></label>
+                <label className={draft.reviewFields?.includes("地点") ? "needs-review" : ""}><span>地点</span><input value={draft.record["地点"]} onChange={(e) => updateRecord(index, "地点", e.target.value)} /></label>
+                <label className={!draft.record["星期"].trim() || draft.reviewFields?.includes("星期") ? "needs-review" : ""}><span>星期 *</span><select value={draft.record["星期"]} onChange={(e) => updateRecord(index, "星期", e.target.value)}><option value="">请选择</option>{["一","二","三","四","五","六","日"].map((day) => <option key={day} value={`周${day}`}>周{day}</option>)}</select></label>
+                <label className={!draft.record["开始节次"].trim() || draft.reviewFields?.includes("开始节次") ? "needs-review" : ""}><span>开始节次 *</span><select value={draft.record["开始节次"]} onChange={(e) => updateRecord(index, "开始节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
+                <label className={!draft.record["结束节次"].trim() || draft.reviewFields?.includes("结束节次") ? "needs-review" : ""}><span>结束节次 *</span><select value={draft.record["结束节次"]} onChange={(e) => updateRecord(index, "结束节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
+                <label className={!draft.record["周次"].trim() || draft.reviewFields?.includes("周次") ? "needs-review" : ""}><span>周次 *</span><input placeholder="例如 1-18 或 1-18单" value={draft.record["周次"]} onChange={(e) => updateRecord(index, "周次", e.target.value)} /></label>
                 <label><span>备注</span><input value={draft.record["备注"]} onChange={(e) => updateRecord(index, "备注", e.target.value)} /></label>
               </div>
             </article>)}
