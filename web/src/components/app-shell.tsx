@@ -21,8 +21,8 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
     <div className="app-frame">
       <header className="mobile-header">
         <Link href="/dashboard" className="brand-mark" aria-label="同频课表首页">同</Link>
-        <span>同频课表</span>
-        <button className="icon-button" onClick={() => setOpen((value) => !value)} aria-label="打开导航">
+        <span className="mobile-brand-title">同频课表</span>
+        <button className="icon-button" onClick={() => setOpen((value) => !value)} aria-label={open ? "关闭账户菜单" : "打开账户菜单"}>
           {open ? <X size={21} /> : <Menu size={21} />}
         </button>
       </header>
@@ -59,6 +59,17 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
 
       {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="关闭导航" />}
       <main className="main-content">{children}</main>
+      <nav className="mobile-bottom-nav" aria-label="手机端主要导航">
+        {navigation.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href;
+          return (
+            <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+              <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+              <span>{label.replace("实验室", "")}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

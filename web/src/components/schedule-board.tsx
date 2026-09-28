@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { addDays, format, parseISO } from "date-fns";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getShanghaiClock } from "@/lib/current-course-status";
 import { describeWeeks, type SchedulePeriod, weekdays } from "@/lib/schedule-types";
@@ -67,7 +68,7 @@ export function ScheduleBoard<T extends ScheduleItem>({ courses, week, periods, 
 
   return (
     <div ref={scrollRef} className={`schedule-scroll ${compact ? "compact" : ""}`}>
-      <div className="schedule-grid" style={{ gridTemplateRows: `62px repeat(${rowCount}, ${compact ? 56 : 76}px)` }}>
+      <div className="schedule-grid" style={{ "--schedule-row-count": rowCount } as CSSProperties}>
         <div className="schedule-corner"><span>节次</span></div>
         {weekdays.map((day, index) => {
           const isToday = index === todayIndex;
