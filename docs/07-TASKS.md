@@ -64,7 +64,7 @@
 - [x] 本地 `.env` 配置（数据库、Better Auth 密钥和本地地址；不进入 Git）
 - [x] 本地 Docker Compose 启动与数据库迁移
 - [x] 腾讯云服务器全新数据库部署：迁移、初始化、容器健康和公网 IP HTTP 健康检查通过
-- [ ] 正式域名解析与 Caddy HTTPS 证书验证
+- [x] 正式域名解析与 Caddy HTTPS：`schedule.henubci.cn` A 记录、Let’s Encrypt 证书、HTTP 308 跳转和 HTTPS 健康检查通过
 - [x] 备份与恢复脚本：`pg_dump` 压缩备份、35 天保留策略、恢复前自动备份和显式确认
 - [x] 在服务器配置每日 03:15 定时备份，并完成首次备份
 - [x] 建立首份服务器外异地备份副本并核对 SHA-256；本机副本目录受 Git 忽略保护

@@ -126,3 +126,12 @@ sudo env RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/sched
 - 异地副本：已将首次备份下载到维护者本机 `web/backups/server-schedule-20260928T115518Z.dump`；文件大小 35,371 字节，服务器与本机 SHA-256 均为 `d8913ed72e3fd605ddabda3150d3693dbce73068a5d09bcff982d56c4f6f230e`。`web/backups` 已被 Git 忽略，副本不得进入仓库或公开网盘。
 - 恢复演练：备份已恢复到隔离临时数据库，核对得到 1 个学期、13 个节次、2 位成员、0 门课程和 0 条审计记录；验证后已删除临时数据库，生产库未被覆盖。
 - 尚未完成：`schedule.henubci.cn` DNS、Caddy HTTPS 证书，以及注册登录后的生产浏览器业务冒烟测试。当前 IP HTTP 地址只用于上线前验收，不作为正式登录入口。首次服务器外副本已建立，正式开放后仍需定期更新并校验异地副本。
+
+## 9. 2026-09-28 正式域名与 HTTPS 验证记录
+
+- DNS：`schedule.henubci.cn` 的 A 记录在本机默认解析器与公共 `1.1.1.1` 上均解析为 `43.132.209.32`，TTL 为 600 秒。
+- 生产来源：服务器 `.env` 已切换为 `APP_DOMAIN=schedule.henubci.cn`，应用地址和 Better Auth 可信来源均为 `https://schedule.henubci.cn`；文件权限保持 `600`，未输出任何密钥。
+- 证书：Caddy 已通过 Let’s Encrypt HTTP-01 验证并成功取得证书，自动续期数据保存在 Caddy 持久卷中。
+- 公网检查：HTTP 请求返回 308 并跳转 HTTPS；`https://schedule.henubci.cn/api/health` 返回 `{"status":"ok"}` 与 HTTP 200，TLS 校验结果为 0；注册页返回 200，未登录访问图片导入页会重定向到正式域名登录页。
+- 数据检查：切换 HTTPS 后仍有 1 个学期、13 个节次、2 条未注册名册，账号和课程均为 0；每日 03:15 备份任务仍在。
+- 待人工验收：由真实成员在正式 HTTPS 页面完成注册、登录、注册统计、查看他人课表、本人课程增删改、共同空闲及图片识别导入冒烟。
