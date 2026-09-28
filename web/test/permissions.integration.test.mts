@@ -15,7 +15,7 @@ const { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semester
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
-const { confirmScheduleImport } = await import("@/lib/schedule-import-service");
+const { confirmScheduleImport, previewPastedScheduleImport, ScheduleImportError } = await import("@/lib/schedule-import-service");
 
 let studentA = 0;
 let studentB = 0;
@@ -94,6 +94,36 @@ test("成员保存完全重复课程被拒（BR-06）", async () => {
     () => saveCourse({ input, studentId: studentB, actorUserId: "ub" }),
     (error: Error) => error instanceof DuplicateCourseError,
   );
+});
+
+test("复制表格只生成预览时不写课程或版本", async () => {
+  const member = { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" };
+  const beforeCourses = await db.select().from(courses).where(eq(courses.studentId, studentA));
+  const beforeVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  const preview = await previewPastedScheduleImport(
+    "课程\t任课教师\t上课时间/上课地点\n预览课程\t张老师\t1-18周 三[7-8] A201",
+    member,
+  );
+  const afterCourses = await db.select().from(courses).where(eq(courses.studentId, studentA));
+  const afterVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  assert.equal(preview.errorCount, 0);
+  assert.equal(preview.validCourses.length, 1);
+  assert.deepEqual(afterCourses, beforeCourses);
+  assert.deepEqual(afterVersions, beforeVersions);
+});
+
+test("复制表格识别失败时不写课程或版本", async () => {
+  const member = { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" };
+  const beforeCourses = await db.select().from(courses).where(eq(courses.studentId, studentA));
+  const beforeVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  await assert.rejects(
+    () => previewPastedScheduleImport("这不是带表头的课表", member),
+    (error: Error) => error instanceof ScheduleImportError && error.code === "FILE_INVALID",
+  );
+  const afterCourses = await db.select().from(courses).where(eq(courses.studentId, studentA));
+  const afterVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  assert.deepEqual(afterCourses, beforeCourses);
+  assert.deepEqual(afterVersions, beforeVersions);
 });
 
 test("批量导入只替换当前成员课表，并创建完整历史快照", async () => {

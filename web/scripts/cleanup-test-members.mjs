@@ -16,6 +16,7 @@ try {
 
     let coursesDeleted = 0;
     let auditsDeleted = 0;
+    let versionsDeleted = 0;
     if (memberIds.length > 0) {
       const deleted = await tx`delete from courses where student_id = any(${memberIds}) returning id`;
       coursesDeleted = deleted.length;
@@ -25,13 +26,17 @@ try {
       auditsDeleted = deleted.length;
     }
     if (memberIds.length > 0) {
+      const deleted = await tx`delete from schedule_versions where student_id = any(${memberIds}) returning id`;
+      versionsDeleted = deleted.length;
+    }
+    if (memberIds.length > 0) {
       await tx`delete from students where id = any(${memberIds})`;
     }
     if (userIds.length > 0) {
       await tx`delete from "user" where id = any(${userIds})`;
     }
 
-    console.log(`已删除：测试成员 ${members.length} 人、测试账号 ${userIds.length} 个、课程 ${coursesDeleted} 门、审计 ${auditsDeleted} 条。`);
+    console.log(`已删除：测试成员 ${members.length} 人、测试账号 ${userIds.length} 个、课程 ${coursesDeleted} 门、版本 ${versionsDeleted} 个、审计 ${auditsDeleted} 条。`);
   });
 } finally {
   await sql.end();
