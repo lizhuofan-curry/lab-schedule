@@ -31,9 +31,11 @@ export function parseWeeks(value: string, weekCount: number) {
   if (!cleaned) throw new Error("请填写周次");
   const result: number[] = [];
   for (const rawPart of cleaned.split(/[，,、;；\s]+/).filter(Boolean)) {
-    const part = rawPart.replace(/周/g, "");
+    const part = rawPart
+      .replace(/周/g, "")
+      .replace(/[（(]\s*(单|双)\s*[)）]/g, "$1");
     const match = part.match(/^(\d+)(?:-(\d+))?(单|双)?$/);
-    if (!match) throw new Error(`无法识别周次“${rawPart}”`);
+    if (!match) throw new Error(`周次格式错误，请填写 1-18、1-18单、1-18双或 1,3,5（当前为“${rawPart}”）`);
     const start = Number(match[1]);
     const end = Number(match[2] ?? match[1]);
     if (start < 1 || end < start || end > weekCount) throw new Error(`周次必须在 1-${weekCount} 周内`);
@@ -171,7 +173,11 @@ export function validateImportRecords(records: ImportRecord[], semesterId: numbe
     const weekday = parseWeekday(raw["星期"]);
     if (!weekday) errors.push("星期请填写周一至周日或数字 1-7");
     let weeks: number[] = [];
-    try { weeks = parseWeeks(raw["周次"], weekCount); } catch (error) { errors.push(error instanceof Error ? error.message : "周次格式错误"); }
+    let weeksParsed = true;
+    try { weeks = parseWeeks(raw["周次"], weekCount); } catch (error) {
+      weeksParsed = false;
+      errors.push(error instanceof Error ? error.message : "周次格式错误，请填写 1-18、1-18单、1-18双或 1,3,5");
+    }
     const startPeriod = Number(raw["开始节次"]);
     const endPeriod = Number(raw["结束节次"]);
     if (!Number.isInteger(startPeriod) || !validPeriodNos.includes(startPeriod)) errors.push("开始节次不存在");
@@ -189,7 +195,9 @@ export function validateImportRecords(records: ImportRecord[], semesterId: numbe
       color: raw["颜色"] || "#dce8e3",
     };
     const parsed = courseInputSchema.safeParse(candidate);
-    if (!parsed.success) errors.push(...parsed.error.issues.map((issue) => issue.message));
+    if (!parsed.success) errors.push(...parsed.error.issues
+      .filter((issue) => weeksParsed || issue.path[0] !== "weeks")
+      .map((issue) => issue.message));
     return { rowNumber: index + 2, raw, course: parsed.success ? { ...parsed.data, weeks: normalizeWeeks(parsed.data.weeks) } : null, errors: [...new Set(errors)] };
   });
 

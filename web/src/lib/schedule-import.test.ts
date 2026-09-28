@@ -4,6 +4,18 @@ import { parseCsv, parseWeeks, recordsFromPastedText, recordsFromRows, summarize
 
 test("周次支持范围、单双周与离散周", () => {
   assert.deepEqual(parseWeeks("1-6单, 8, 10-12双", 18), [1, 3, 5, 8, 10, 12]);
+  assert.deepEqual(parseWeeks("1-18周(单)", 18), [1, 3, 5, 7, 9, 11, 13, 15, 17]);
+  assert.deepEqual(parseWeeks("1-18周（双）", 18), [2, 4, 6, 8, 10, 12, 14, 16, 18]);
+});
+
+test("非法周次只返回可操作的中文提示", () => {
+  const [row] = validateImportRecords([{
+    "课程名称": "网络管理与测试", "教师": "", "地点": "", "星期": "周三",
+    "开始节次": "3", "结束节次": "4", "周次": "奇数周", "备注": "", "颜色": "#dce8e3",
+  }], 1, 18, Array.from({ length: 13 }, (_, index) => index + 1));
+  assert.equal(row.errors.length, 1);
+  assert.match(row.errors[0], /周次格式错误.*1-18单/);
+  assert.doesNotMatch(row.errors[0], /Too small|expected array/i);
 });
 
 test("CSV 支持带逗号和双引号的单元格", () => {
