@@ -31,6 +31,7 @@
 
 1. 在本地 `web` 目录完成 `npm ci`、`npm run lint`、`npm test`、`npm run test:integration`、`npm run test:performance` 和 `npm run build`。
 2. 将 `web` 目录上传到服务器，例如 `/opt/tongpin-schedule`；不要上传 `.env`、`.next`、`node_modules` 或 `backups`。
+   仓库会保留空的 `web/public` 目录；Docker 生产镜像构建依赖该目录，即使当前没有额外静态文件也不要删除。
 3. 在服务器复制并编辑生产配置：
 
    ```bash
@@ -38,6 +39,8 @@
    cp .env.production.example .env
    nano .env
    ```
+
+   若需要从现有受保护环境文件继承千问配置，同时重新生成生产数据库密码与登录密钥，可使用 `scripts/prepare-production-env.sh 源文件 APP_URL APP_DOMAIN`。脚本不会输出密钥，生成后会删除源文件并把 `.env` 权限设为 `600`。首次通过 IP 做 HTTP 冒烟测试时，`APP_URL` 与 `APP_DOMAIN` 可临时填写 `http://服务器公网IP`；正式开放前必须改为 HTTPS 域名并重新构建应用。
 
 4. 确认域名 A 记录已经指向服务器公网 IP，腾讯云防火墙只开放 `22`、`80`、`443`。
 5. 构建并启动：
