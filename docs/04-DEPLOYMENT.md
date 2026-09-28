@@ -123,5 +123,6 @@ sudo env RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/sched
 - 发布形态：使用全新 PostgreSQL 数据卷；迁移成功，初始化 1 个学期和 13 个节次；只预置当前已确认的李卓凡、李昱辉两条未注册名册记录，没有迁移本机账号或课表。
 - 运行检查：`db` 与 `app` 容器健康，Caddy 正常监听 `80/443`；服务器内部与公网 IP 的 `/api/health`、`/register` 均返回 HTTP 200，未登录访问受保护的图片导入页返回预期重定向。
 - 备份检查：已生成首次自定义格式备份，并保留腾讯云已有 root 定时任务的同时加入每日 03:15 备份。
+- 异地副本：已将首次备份下载到维护者本机 `web/backups/server-schedule-20260928T115518Z.dump`；文件大小 35,371 字节，服务器与本机 SHA-256 均为 `d8913ed72e3fd605ddabda3150d3693dbce73068a5d09bcff982d56c4f6f230e`。`web/backups` 已被 Git 忽略，副本不得进入仓库或公开网盘。
 - 恢复演练：备份已恢复到隔离临时数据库，核对得到 1 个学期、13 个节次、2 位成员、0 门课程和 0 条审计记录；验证后已删除临时数据库，生产库未被覆盖。
-- 尚未完成：`schedule.henubci.cn` DNS、Caddy HTTPS 证书、服务器外异地备份，以及注册登录后的生产浏览器业务冒烟测试。当前 IP HTTP 地址只用于上线前验收，不作为正式登录入口。
+- 尚未完成：`schedule.henubci.cn` DNS、Caddy HTTPS 证书，以及注册登录后的生产浏览器业务冒烟测试。当前 IP HTTP 地址只用于上线前验收，不作为正式登录入口。首次服务器外副本已建立，正式开放后仍需定期更新并校验异地副本。
