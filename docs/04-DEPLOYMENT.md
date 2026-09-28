@@ -30,12 +30,12 @@
 ## 3. 首次发布
 
 1. 在本地 `web` 目录完成 `npm ci`、`npm run lint`、`npm test`、`npm run test:integration`、`npm run test:performance` 和 `npm run build`。
-2. 将 `web` 目录上传到服务器，例如 `/opt/tongpin-schedule`；不要上传 `.env`、`.next`、`node_modules` 或 `backups`。
+2. 将仓库部署到服务器的 `/opt/tongpin-schedule`，Docker Compose 工作目录为 `/opt/tongpin-schedule/web`；不要上传 `.env`、`.next`、`node_modules` 或 `backups`。
    仓库会保留空的 `web/public` 目录；Docker 生产镜像构建依赖该目录，即使当前没有额外静态文件也不要删除。
 3. 在服务器复制并编辑生产配置：
 
    ```bash
-   cd /opt/tongpin-schedule
+   cd /opt/tongpin-schedule/web
    cp .env.production.example .env
    nano .env
    ```
@@ -46,9 +46,9 @@
 5. 构建并启动：
 
    ```bash
-   docker compose build
-   docker compose up -d
-   docker compose ps
+   sudo docker compose build
+   sudo docker compose up -d
+   sudo docker compose ps
    ```
 
    `migrate` 服务会先执行数据库迁移和学期/节次初始化，成功后应用才启动。
@@ -56,8 +56,8 @@
 6. 检查容器和健康接口：
 
    ```bash
-   docker compose ps
-   docker compose logs --tail=100 migrate app caddy
+   sudo docker compose ps
+   sudo docker compose logs --tail=100 migrate app caddy
    curl -fsS https://你的域名/api/health
    ```
 
@@ -70,12 +70,12 @@
 仅修改页面或业务代码时，数据库卷不会因为重建应用而消失：
 
 ```bash
-cd /opt/tongpin-schedule
-sh scripts/backup-db.sh
+cd /opt/tongpin-schedule/web
+sudo sh scripts/backup-db.sh
 # 上传新版本或拉取已确认的 Git 提交
-docker compose build app migrate
-docker compose up -d
-docker compose ps
+sudo docker compose build app migrate
+sudo docker compose up -d
+sudo docker compose ps
 ```
 
 如果新版本包含数据库迁移，必须先完成备份，再启动 `migrate`。更新后检查健康接口和关键页面。禁止使用 `docker compose down -v`，因为 `-v` 会删除 PostgreSQL 和 Caddy 数据卷。
@@ -88,11 +88,11 @@ docker compose ps
 
 ## 6. 备份与恢复
 
-- 手工备份：`sh scripts/backup-db.sh`。备份保存在 `web/backups`，脚本保留最近 35 天，覆盖最近 7 天和最近 4 周。
+- 手工备份：在 `web` 目录执行 `sudo sh scripts/backup-db.sh`。备份保存在 `web/backups`，脚本保留最近 35 天，覆盖最近 7 天和最近 4 周。
 - 每日自动备份可用服务器 `crontab -e` 添加：
 
   ```cron
-  15 3 * * * cd /opt/tongpin-schedule && /bin/sh scripts/backup-db.sh >> /var/log/tongpin-backup.log 2>&1
+  15 3 * * * cd /opt/tongpin-schedule/web && /bin/sh scripts/backup-db.sh >> /var/log/tongpin-backup.log 2>&1
   ```
 
 - 备份至少有一份复制到服务器之外。
@@ -102,8 +102,8 @@ docker compose ps
 恢复命令会先再次备份当前数据库，并要求显式确认：
 
 ```bash
-cd /opt/tongpin-schedule
-RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/schedule-时间.dump
+cd /opt/tongpin-schedule/web
+sudo env RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/schedule-时间.dump
 ```
 
 恢复演练必须验证：用户、成员绑定、课程、学期和审计记录均可读取，而不只是命令返回成功。
@@ -116,3 +116,12 @@ RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/schedule-时�
 - **保留本地数据**：先对本地 PostgreSQL 执行 `scripts/backup-db.sh`，把生成的 `.dump` 安全上传到服务器，再使用恢复脚本导入。恢复前确认备份中不包含测试成员或错误课表。
 
 本地 Docker 数据卷不会随源代码上传而自动出现在服务器上。
+
+## 8. 2026-09-28 首次服务器发布记录
+
+- 服务器：腾讯云 Ubuntu 24.04，代码提交 `91ee70b`，仓库位于 `/opt/tongpin-schedule`。
+- 发布形态：使用全新 PostgreSQL 数据卷；迁移成功，初始化 1 个学期和 13 个节次；只预置当前已确认的李卓凡、李昱辉两条未注册名册记录，没有迁移本机账号或课表。
+- 运行检查：`db` 与 `app` 容器健康，Caddy 正常监听 `80/443`；服务器内部与公网 IP 的 `/api/health`、`/register` 均返回 HTTP 200，未登录访问受保护的图片导入页返回预期重定向。
+- 备份检查：已生成首次自定义格式备份，并保留腾讯云已有 root 定时任务的同时加入每日 03:15 备份。
+- 恢复演练：备份已恢复到隔离临时数据库，核对得到 1 个学期、13 个节次、2 位成员、0 门课程和 0 条审计记录；验证后已删除临时数据库，生产库未被覆盖。
+- 尚未完成：`schedule.henubci.cn` DNS、Caddy HTTPS 证书、服务器外异地备份，以及注册登录后的生产浏览器业务冒烟测试。当前 IP HTTP 地址只用于上线前验收，不作为正式登录入口。
