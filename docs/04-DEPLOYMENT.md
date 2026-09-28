@@ -25,6 +25,8 @@
 
 可以在服务器执行 `openssl rand -hex 32` 分别生成两个不同的随机值。系统不设置管理员账号。`.env` 不进入 Git，不粘贴到聊天、截图或提交记录中。
 
+本地开发若需要通过局域网 IP 而不是 `localhost` 访问，可在本地 `.env` 设置 `NEXT_ALLOWED_DEV_ORIGINS=局域网IP`，并确保 `BETTER_AUTH_URL` 与 `BETTER_AUTH_TRUSTED_ORIGINS` 包含实际访问地址；生产环境使用正式 HTTPS 域名，不需要该开发变量。
+
 ## 3. 首次发布
 
 1. 在本地 `web` 目录完成 `npm ci`、`npm run lint`、`npm test`、`npm run test:integration`、`npm run test:performance` 和 `npm run build`。

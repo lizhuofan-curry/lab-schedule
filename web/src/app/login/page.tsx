@@ -47,7 +47,7 @@ export default function LoginPage() {
         <MiniBoard />
       </section>
       <section className="auth-form-side">
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="auth-form" method="post" onSubmit={handleSubmit}>
           <div><span className="eyebrow">欢迎回来</span><h2>登录实验室课表</h2><p>使用你的学号和密码登录。</p></div>
           <label className="field"><span>学号</span><input name="studentNo" autoComplete="username" required placeholder="请输入学号" /></label>
           <label className="field"><span>密码</span><span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="请输入密码" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "隐藏密码" : "显示密码"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
