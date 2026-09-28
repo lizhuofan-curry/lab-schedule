@@ -7,7 +7,7 @@ const themes = [
   { id: "neural", label: "神经信号", colors: ["#e87078", "#4c78b5"] },
   { id: "ocean", label: "深海脑电", colors: ["#12a1ad", "#164e75"] },
   { id: "green", label: "脑电绿", colors: ["#d46b47", "#245c4d"] },
-  { id: "night", label: "夜间实验", colors: ["#76d4dd", "#17253e"] },
+  { id: "night", label: "夜间实验", colors: ["#78989d", "#1b2635"] },
 ] as const;
 
 type ThemeId = typeof themes[number]["id"];

@@ -40,6 +40,11 @@ function isActive(course: ScheduleItem, week: number) {
   return true;
 }
 
+function courseTone(name: string) {
+  const hash = Array.from(name).reduce((total, character) => total + (character.codePointAt(0) ?? 0), 0);
+  return `course-tone-${hash % 5 + 1}`;
+}
+
 export function ScheduleBoard<T extends ScheduleItem>({ courses, week, periods, semesterStartDate, editable = false, onCellClick, onCourseClick, compact = false }: ScheduleBoardProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayHeaderRef = useRef<HTMLDivElement>(null);
@@ -104,11 +109,10 @@ export function ScheduleBoard<T extends ScheduleItem>({ courses, week, periods, 
         {activeCourses.map((course) => (
           <button
             key={course.id}
-            className={`course-card ${course.weekday - 1 === todayIndex ? "today-course" : ""}`}
+            className={`course-card ${courseTone(course.name)} ${course.weekday - 1 === todayIndex ? "today-course" : ""}`}
             style={{
               gridColumn: course.weekday + 1,
               gridRow: `${rowForPeriod(course.startPeriod)} / ${rowForPeriod(course.endPeriod) + 1}`,
-              background: course.color,
             }}
             onClick={() => onCourseClick?.(course)}
           >

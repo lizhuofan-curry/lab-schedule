@@ -15,6 +15,12 @@
   --green-pale: #dfe9f5;
   --logo-left: #e87078;
   --logo-right: #4c78b5;
+  --course-text: #17243a; --course-meta: #4f5d70; --course-muted: #6e7a89;
+  --course-1-bg: #dfe9f6; --course-1-accent: #6d8fbd;
+  --course-2-bg: #f4e3e5; --course-2-accent: #bf747b;
+  --course-3-bg: #e9e4f3; --course-3-accent: #897dac;
+  --course-4-bg: #dfeded; --course-4-accent: #6d999a;
+  --course-5-bg: #f1e9d9; --course-5-accent: #aa9062;
   --shadow: 0 18px 50px rgba(35, 66, 105, 0.09);
   --radius: 18px;
 }
@@ -24,6 +30,12 @@ html[data-theme="ocean"] {
   --paper: #eff7f8; --panel: #ffffff; --surface-soft: #f5fafb; --line: #d5e6e8;
   --line-dark: #b9d3d7; --rust: #ec7470; --blue: #287e9a; --green-pale: #d9edef;
   --logo-left: #ec7470; --logo-right: #16859a; --shadow: 0 18px 50px rgba(16, 75, 88, .10);
+  --course-text: #102d3a; --course-meta: #48656f; --course-muted: #647b83;
+  --course-1-bg: #d9ecee; --course-1-accent: #568f96;
+  --course-2-bg: #dfe9ef; --course-2-accent: #62879d;
+  --course-3-bg: #e5e6ef; --course-3-accent: #747f9d;
+  --course-4-bg: #e9e9df; --course-4-accent: #8a8f75;
+  --course-5-bg: #e3ecef; --course-5-accent: #6c8e9a;
 }
 
 html[data-theme="green"] {
@@ -31,14 +43,26 @@ html[data-theme="green"] {
   --paper: #f3f6f3; --panel: #ffffff; --surface-soft: #f7f9f8; --line: #dce3df;
   --line-dark: #c6d0cb; --rust: #d26640; --blue: #476d8f; --green-pale: #dce9e4;
   --logo-left: #d96c62; --logo-right: #376d60; --shadow: 0 18px 50px rgba(25, 55, 46, .08);
+  --course-text: #17241f; --course-meta: #4c5e56; --course-muted: #68776f;
+  --course-1-bg: #dce9e4; --course-1-accent: #668d7e;
+  --course-2-bg: #e9e3d8; --course-2-accent: #967f61;
+  --course-3-bg: #e4ead8; --course-3-accent: #7f9163;
+  --course-4-bg: #e8dfdd; --course-4-accent: #92766e;
+  --course-5-bg: #dde6e8; --course-5-accent: #6d858b;
 }
 
 html[data-theme="night"] {
   color-scheme: dark;
-  --ink: #eaf2ff; --ink-soft: #aab8cc; --forest: #347f9a; --forest-2: #76d4dd;
-  --paper: #0b1220; --panel: #111d31; --surface-soft: #16243a; --line: #283852;
-  --line-dark: #3b4d69; --rust: #ff8589; --blue: #76a9e5; --green-pale: #1a3850;
-  --logo-left: #ff8589; --logo-right: #76d4dd; --shadow: 0 18px 50px rgba(0, 0, 0, .26);
+  --ink: #e3e8ed; --ink-soft: #a5afb9; --forest: #3f596a; --forest-2: #78989d;
+  --paper: #101722; --panel: #161f2d; --surface-soft: #1b2635; --line: #2a3748;
+  --line-dark: #3b495b; --rust: #bd7f81; --blue: #788fa9; --green-pale: #263744;
+  --logo-left: #c48385; --logo-right: #78989d; --shadow: 0 18px 50px rgba(3, 8, 14, .22);
+  --course-text: #e4e8eb; --course-meta: #b6c0c8; --course-muted: #929fa8;
+  --course-1-bg: #263744; --course-1-accent: #72939b;
+  --course-2-bg: #32333f; --course-2-accent: #918394;
+  --course-3-bg: #30392f; --course-3-accent: #82917a;
+  --course-4-bg: #3a332e; --course-4-accent: #9b856f;
+  --course-5-bg: #283641; --course-5-accent: #728b9e;
 }
 
 * { box-sizing: border-box; }
@@ -218,13 +242,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .schedule-cell.editable:hover { background: #e7f1ec; }
 .cell-plus { position: absolute; opacity: 0; inset: 50% auto auto 50%; transform: translate(-50%, -50%); color: var(--forest-2); }
 .schedule-cell.editable:hover .cell-plus, .schedule-cell.editable:focus .cell-plus { opacity: 1; }
-.course-card { z-index: 2; margin: 5px; border: 0; border-left: 4px solid rgba(23,63,52,.45); border-radius: 9px; padding: 10px; text-align: left; overflow: hidden; cursor: pointer; box-shadow: 0 3px 9px rgba(23,45,38,.07); transition: transform .15s ease, box-shadow .15s ease; }
+.course-card { z-index: 2; margin: 5px; border: 0; border-left: 4px solid var(--course-accent); border-radius: 9px; padding: 10px; background: var(--course-bg); color: var(--course-text); text-align: left; overflow: hidden; cursor: pointer; box-shadow: 0 3px 9px rgba(23,45,38,.07); transition: transform .15s ease, box-shadow .15s ease, background-color .2s ease, border-color .2s ease, color .2s ease; }
+.course-card.course-tone-1 { --course-bg: var(--course-1-bg); --course-accent: var(--course-1-accent); }
+.course-card.course-tone-2 { --course-bg: var(--course-2-bg); --course-accent: var(--course-2-accent); }
+.course-card.course-tone-3 { --course-bg: var(--course-3-bg); --course-accent: var(--course-3-accent); }
+.course-card.course-tone-4 { --course-bg: var(--course-4-bg); --course-accent: var(--course-4-accent); }
+.course-card.course-tone-5 { --course-bg: var(--course-5-bg); --course-accent: var(--course-5-accent); }
 .course-card:hover { transform: translateY(-1px); box-shadow: 0 7px 15px rgba(23,45,38,.12); }
-.course-card.today-course { outline: 2px solid rgba(23,63,52,.34); outline-offset: -2px; box-shadow: 0 5px 14px rgba(23,63,52,.16); }
+.course-card.today-course { outline: 2px solid color-mix(in srgb, var(--course-accent) 68%, transparent); outline-offset: -2px; box-shadow: 0 5px 14px color-mix(in srgb, var(--forest) 18%, transparent); }
 .course-card strong, .course-card span, .course-card small { display: block; }
 .course-card strong { font-size: 13px; line-height: 1.35; }
-.course-card span { margin-top: 5px; font-size: 11px; color: #47534f; }
-.course-card small { margin-top: 6px; font-size: 10px; color: #67756f; }
+.course-card span { margin-top: 5px; font-size: 11px; color: var(--course-meta); }
+.course-card small { margin-top: 6px; font-size: 10px; color: var(--course-muted); }
 .compact .schedule-grid { min-width: 820px; grid-template-columns: 66px repeat(7, minmax(104px, 1fr)); }
 .compact .course-card { padding: 8px; }
 .timetable-panel { padding: 28px; }
@@ -755,8 +784,8 @@ body {
 /* BCI 品牌主题：暗色模式只改变材质与色彩，不改变信息结构。 */
 html[data-theme="night"] body {
   background:
-    radial-gradient(circle at 88% 2%, rgba(118, 212, 221, .08), transparent 25rem),
-    linear-gradient(180deg, #0d1728 0, var(--paper) 34rem);
+    radial-gradient(circle at 88% 2%, rgba(120, 152, 157, .055), transparent 25rem),
+    linear-gradient(180deg, #131c29 0, var(--paper) 34rem);
 }
 html[data-theme="night"] :where(
   .sidebar, .mobile-header, .panel, .stat-card, .week-switcher, .schedule-scroll,
@@ -764,26 +793,25 @@ html[data-theme="night"] :where(
   .field input, .field select, .field textarea, .password-input, .roster-panel,
   .member-browser, .dialog, .import-dropzone, .image-drop, .ocr-course-card
 ) { background-color: var(--panel); color: var(--ink); }
-html[data-theme="night"] :where(.schedule-day, .schedule-corner, .period-label) { background: #142238; }
-html[data-theme="night"] .schedule-cell.today-column { background: #122a39; }
+html[data-theme="night"] :where(.schedule-day, .schedule-corner, .period-label) { background: #1a2534; }
+html[data-theme="night"] .schedule-cell.today-column { background: #1b2933; }
 html[data-theme="night"] .schedule-day.today { background: var(--forest); }
-html[data-theme="night"] :where(.member-row:hover, .member-row.selected, .grade-filter, .segmented) { background: #182940; }
-html[data-theme="night"] :where(.grade-filter button.active, .segmented button.active) { background: #243a57; color: var(--ink); }
+html[data-theme="night"] :where(.member-row:hover, .member-row.selected, .grade-filter, .segmented) { background: #1c2938; }
+html[data-theme="night"] :where(.grade-filter button.active, .segmented button.active) { background: #2a394a; color: var(--ink); }
 
 .mobile-bottom-nav.guest-nav { grid-template-columns: repeat(3, 1fr); }
-html[data-theme="night"] :where(.button.secondary, .button.light) { background: #182940; color: var(--ink); }
+html[data-theme="night"] :where(.button.secondary, .button.light) { background: #1c2938; color: var(--ink); }
 html[data-theme="night"] .auth-page { background: var(--paper); }
-html[data-theme="night"] .auth-story { background: #111f34; }
+html[data-theme="night"] .auth-story { background: #172231; }
 html[data-theme="night"] .auth-form-side { background: var(--paper); }
 html[data-theme="night"] .field > span { color: #aab8cc; }
 html[data-theme="night"] .theme-option.active { box-shadow: 0 5px 14px rgba(0,0,0,.22); }
 html[data-theme="night"] .brand-mark { background: #f8fbff; }
 html[data-theme="night"] .brand-mark .circuit-node { fill: #f8fbff; }
-html[data-theme="night"] .course-card { color: #17243a; }
 
 @media (max-width: 780px) {
   .mobile-header .brand-mark .bci-logo { width: 27px; height: 27px; }
   .theme-switcher { padding-inline: 4px; }
-  html[data-theme="night"] body { background: linear-gradient(180deg, #0d1728 0, #0b1220 26rem); }
+  html[data-theme="night"] body { background: linear-gradient(180deg, #131c29 0, #101722 26rem); }
   .compact-theme-switcher { top: 12px; right: 12px; }
 }
