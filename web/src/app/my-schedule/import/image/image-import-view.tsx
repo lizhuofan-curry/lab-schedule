@@ -119,12 +119,14 @@ export function ImageImportView() {
     if (!file) return setError("请先选择一张课表截图。");
     if (recognitionMode === "vision" && !visionConsent) return setError("请先勾选同意，将本次图片发送给千问模型进行识别。");
     setLoading("ocr"); setError(""); setNotice(""); setPreview(null); setSuccess(null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), recognitionMode === "vision" ? 45_000 : 90_000);
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("mode", recognitionMode);
       if (recognitionMode === "vision") form.append("visionConsent", "true");
-      const response = await fetch("/api/my/schedule-import/image-ocr", { method: "POST", body: form });
+      const response = await fetch("/api/my/schedule-import/image-ocr", { method: "POST", body: form, signal: controller.signal });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message ?? "图片识别失败。");
       const result = payload.data as OcrResult;
@@ -134,8 +136,11 @@ export function ImageImportView() {
       setNotice(suggestions.length
         ? `${result.mode === "vision" ? `智能识别（${result.model ?? "千问"}）` : "本地 OCR"}已生成 ${suggestions.length} 条候选。请删除无关行并重点核对标红字段。`
         : "识别到了文字，但没有可靠课程候选。已创建一行空白草稿，请参考左侧图片填写。");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "图片识别失败。"); }
-    finally { setLoading(""); }
+    } catch (cause) {
+      setError(cause instanceof Error && cause.name === "AbortError"
+        ? "识别等待时间过长，已自动停止。请裁剪图片后重试，或切换另一种识别方式。"
+        : cause instanceof Error ? cause.message : "图片识别失败。");
+    } finally { window.clearTimeout(timeout); setLoading(""); }
   }
 
   function updateRecord(index: number, field: ImportHeader, value: string) {
@@ -204,7 +209,7 @@ export function ImageImportView() {
         <div className="image-draft-heading"><div><span className="eyebrow">第 2 步</span><h2>校对课程草稿</h2></div>{drafts.length > 0 && <span className="draft-count">{drafts.length} 条</span>}</div>
         {!ocr ? <div className="image-empty-state"><ScanLine size={36} /><strong>识别后在这里逐项校对</strong><p>系统不会直接写入数据库，也不会保存上传的图片。</p></div> : <>
           {notice && <div className="import-warning"><AlertTriangle size={18} /><span>{notice}</span></div>}
-          <details className="ocr-raw-text"><summary>查看 OCR 识别原文</summary><pre>{ocr.text}</pre></details>
+          {ocr.mode === "local" && ocr.text && <details className="ocr-raw-text"><summary>查看 OCR 识别原文</summary><pre>{ocr.text}</pre></details>}
           <div className="ocr-draft-list">
             {drafts.map((draft, index) => <article className={`ocr-draft-card ${draft.reviewFields?.length ? "needs-review" : ""}`} key={draft.id}>
               <div className="ocr-draft-card-head"><div><span>候选 {index + 1}</span><small className={draft.confidence < 70 ? "low" : ""}>文字置信度 {draft.confidence}%</small></div><button type="button" aria-label={`删除候选 ${index + 1}`} onClick={() => { setDrafts((items) => items.filter((_, i) => i !== index)); setPreview(null); }}><Trash2 size={16} /></button></div>

@@ -28,6 +28,7 @@ mock.module("@/lib/schedule-import-service", {
 mock.module("@/lib/image-ocr-service", {
   namedExports: {
     ImageOcrError: class ImageOcrError extends Error {},
+    validateScheduleImage: () => { throw new Error("不应执行"); },
     recognizeScheduleImage: async () => { throw new Error("不应执行"); },
   },
 });

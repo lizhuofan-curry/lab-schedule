@@ -29,11 +29,11 @@ function getConfig() {
   return { model, apiKey, baseUrl };
 }
 
-export async function recognizeScheduleWithVision(file: File, localOcrText: string) {
+export async function recognizeScheduleWithVision(file: File) {
   const { model, apiKey, baseUrl } = getConfig();
   const imageBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55_000);
+  const timeout = setTimeout(() => controller.abort(), 40_000);
   let response: Response;
   try {
     response = await fetch(`${baseUrl}/chat/completions`, {
@@ -47,19 +47,22 @@ export async function recognizeScheduleWithVision(file: File, localOcrText: stri
             role: "user",
             content: [
               { type: "image_url", image_url: { url: `data:${file.type};base64,${imageBase64}` } },
-              { type: "text", text: `请识别这张课表。下面是本地 OCR 原文，仅作辅助；图片内容优先：\n${localOcrText.slice(0, 12_000)}` },
+              { type: "text", text: "请直接根据图片识别并结构化这张课表。" },
             ],
           },
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
-        max_tokens: 6000,
+        max_tokens: 4000,
         enable_thinking: false,
       }),
       signal: controller.signal,
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ScheduleVisionError("VISION_PROVIDER_FAILED", "智能识别超过 40 秒仍未完成，请重试、裁剪图片，或改用本地识别。");
+    }
     throw new ScheduleVisionError("VISION_PROVIDER_FAILED", "智能识别服务暂时无法连接，请稍后重试或改用本地识别。");
   } finally {
     clearTimeout(timeout);
