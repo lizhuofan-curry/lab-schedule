@@ -769,6 +769,8 @@ html[data-theme="night"] .schedule-cell.today-column { background: #122a39; }
 html[data-theme="night"] .schedule-day.today { background: var(--forest); }
 html[data-theme="night"] :where(.member-row:hover, .member-row.selected, .grade-filter, .segmented) { background: #182940; }
 html[data-theme="night"] :where(.grade-filter button.active, .segmented button.active) { background: #243a57; color: var(--ink); }
+
+.mobile-bottom-nav.guest-nav { grid-template-columns: repeat(3, 1fr); }
 html[data-theme="night"] :where(.button.secondary, .button.light) { background: #182940; color: var(--ink); }
 html[data-theme="night"] .auth-page { background: var(--paper); }
 html[data-theme="night"] .auth-story { background: #111f34; }

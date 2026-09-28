@@ -10,6 +10,8 @@ process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/sch
 mock.module("@/lib/server-auth", {
   namedExports: {
     getCurrentMember: async () => null,
+    getCurrentViewer: async () => null,
+    maskStudentNo: (studentNo: string | null) => studentNo,
     unauthorized: () => Response.json({ code: "UNAUTHORIZED", message: "请先登录。" }, { status: 401 }),
     forbidden: () => Response.json({ code: "FORBIDDEN", message: "无权限。" }, { status: 403 }),
   },

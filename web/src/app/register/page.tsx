@@ -33,7 +33,7 @@ export default function RegisterPage() {
     });
     setLoading(false);
     if (result.error) {
-      setError(result.error.message || "注册失败，请核对姓名和学号，或联系项目维护者。");
+      setError(result.error.message || "注册失败，请检查填写内容或稍后重试。");
       return;
     }
     router.push("/dashboard");
@@ -44,13 +44,13 @@ export default function RegisterPage() {
     <main className="auth-page register-page">
       <section className="auth-story">
         <Link href="/login" className="back-link"><ArrowLeft size={17} /> 返回登录</Link>
-        <div className="story-copy"><span className="eyebrow light">只需一分钟</span><h1>找到你的名字，<br />建立自己的课表。</h1><p>实验室名册会提前导入系统，注册信息必须与名册一致。</p></div>
+        <div className="story-copy"><span className="eyebrow light">只需一分钟</span><h1>创建账号，<br />建立自己的课表。</h1><p>无需等待预置名单，填写真实姓名和本人学号即可加入。</p></div>
         <div className="register-notes"><p><CheckCircle2 size={19} /> 所有成员可以互相查看课表</p><p><ShieldCheck size={19} /> 只有你可以修改自己的课程</p></div>
       </section>
       <section className="auth-form-side">
         <ThemeSwitcher compact />
         <form className="auth-form" method="post" onSubmit={handleSubmit}>
-          <div><span className="eyebrow">创建账号</span><h2>注册实验室课表</h2><p>请使用实验室名册中的姓名和学号。</p></div>
+          <div><span className="eyebrow">创建账号</span><h2>注册实验室课表</h2><p>注册成功后会自动加入成员目录，请填写真实信息。</p></div>
           <label className="field"><span>姓名</span><input name="name" required autoComplete="name" placeholder="请输入真实姓名" /></label>
           <label className="field"><span>学号</span><input name="studentNo" required autoComplete="username" placeholder="请输入学号" /></label>
           <label className="field"><span>设置密码</span><input name="password" type="password" minLength={8} maxLength={128} required autoComplete="new-password" placeholder="至少 8 位" /></label>

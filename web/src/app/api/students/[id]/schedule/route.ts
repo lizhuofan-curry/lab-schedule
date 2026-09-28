@@ -1,5 +1,5 @@
 import { getMemberWeekSchedule } from "@/lib/schedule-service";
-import { getCurrentMember, unauthorized } from "@/lib/server-auth";
+import { getCurrentViewer, maskStudentNo, unauthorized } from "@/lib/server-auth";
 
 function positiveInteger(value: string | null) {
   const parsed = Number(value);
@@ -7,8 +7,8 @@ function positiveInteger(value: string | null) {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const currentMember = await getCurrentMember(request.headers);
-  if (!currentMember) return unauthorized();
+  const viewer = await getCurrentViewer(request.headers);
+  if (!viewer) return unauthorized();
 
   const studentId = positiveInteger((await params).id);
   const url = new URL(request.url);
@@ -20,5 +20,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const data = await getMemberWeekSchedule(studentId, semesterId, week);
   if (!data) return Response.json({ code: "STUDENT_NOT_FOUND", message: "该成员不存在或已停用。" }, { status: 404 });
-  return Response.json({ data });
+  return Response.json({ data: viewer.kind === "guest" ? { ...data, member: { ...data.member, studentNo: maskStudentNo(data.member.studentNo) } } : data });
 }

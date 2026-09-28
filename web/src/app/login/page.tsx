@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "@/lib/auth-client";
-import { ArrowRight, CalendarDays, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, CalendarDays, Eye, EyeOff, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -13,6 +13,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  async function enterAsGuest() {
+    setLoading(true);
+    setError("");
+    const response = await fetch("/api/guest-session", { method: "POST" });
+    setLoading(false);
+    if (!response.ok) {
+      setError("游客模式暂时不可用，请稍后重试。");
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,6 +69,7 @@ export default function LoginPage() {
           <label className="field"><span>密码</span><span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="请输入密码" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "隐藏密码" : "显示密码"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
           {error && <div className="form-error" role="alert">{error}</div>}
           <button className="button primary wide" disabled={loading}>{loading ? "正在登录…" : <>登录 <ArrowRight size={17} /></>}</button>
+          <button className="button secondary wide" type="button" disabled={loading} onClick={enterAsGuest}><UserRound size={17} /> 游客只读访问</button>
           <p className="auth-switch">第一次使用？<Link href="/register">用姓名和学号注册</Link></p>
           <p className="form-help">忘记密码时，请联系项目维护者协助重置。</p>
         </form>

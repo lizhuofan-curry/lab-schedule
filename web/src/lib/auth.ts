@@ -43,9 +43,9 @@ export const auth = betterAuth({
   },
   trustedOrigins,
   rateLimit: {
-    enabled: true,
+    enabled: process.env.AUTH_DISABLE_RATE_LIMIT !== "1",
     window: 60,
-    max: 20,
+    max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 20),
   },
   advanced: {
     useSecureCookies: authBaseUrl.startsWith("https://"),
@@ -62,18 +62,13 @@ export const auth = betterAuth({
         throw new APIError("BAD_REQUEST", { message: "请使用姓名和学号完成注册。" });
       }
 
-      const [student] = await db.select({ id: schema.students.id })
+      const [student] = await db.select({ id: schema.students.id, userId: schema.students.userId })
         .from(schema.students)
-        .where(and(
-          eq(schema.students.studentNo, studentNo),
-          eq(schema.students.name, name),
-          eq(schema.students.enabled, true),
-          isNull(schema.students.userId),
-        ))
+        .where(eq(schema.students.studentNo, studentNo))
         .limit(1);
 
-      if (!student) {
-        throw new APIError("UNPROCESSABLE_ENTITY", { message: "姓名和学号不在名册中，或该学号已经注册。" });
+      if (student?.userId) {
+        throw new APIError("CONFLICT", { message: "该学号已经注册，请直接登录。" });
       }
     }),
   },
@@ -85,17 +80,24 @@ export const auth = betterAuth({
           if (!studentNo) return;
 
           const bound = await db.update(schema.students)
-            .set({ userId: user.id, updatedAt: new Date() })
+            .set({ name: user.name.trim(), userId: user.id, enabled: true, updatedAt: new Date() })
             .where(and(
               eq(schema.students.studentNo, studentNo),
-              eq(schema.students.name, user.name.trim()),
-              eq(schema.students.enabled, true),
               isNull(schema.students.userId),
             ))
             .returning({ id: schema.students.id });
 
-          if (bound.length !== 1) {
-            throw new APIError("CONFLICT", { message: "名册绑定失败，请联系项目维护者处理。" });
+          if (bound.length === 0) {
+            try {
+              await db.insert(schema.students).values({
+                name: user.name.trim(),
+                studentNo,
+                userId: user.id,
+                enabled: true,
+              });
+            } catch {
+              throw new APIError("CONFLICT", { message: "该学号已经注册，请直接登录。" });
+            }
           }
         },
       },

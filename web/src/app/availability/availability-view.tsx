@@ -43,10 +43,11 @@ function formatDate(date: string) {
   return `${month}月${day}日`;
 }
 
-export function AvailabilityView({ members, semester, currentUser }: {
+export function AvailabilityView({ members, semester, currentUser, guest = false }: {
   members: ScheduleMember[];
   semester: ScheduleSemester;
   currentUser: { name: string; studentNo: string };
+  guest?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>("person");
   const [grade, setGrade] = useState<GradeFilter>("all");
@@ -111,8 +112,8 @@ export function AvailabilityView({ members, semester, currentUser }: {
   const selectedPerson = personId ? memberById.get(personId) : null;
   const freeWindowCount = result?.days.reduce((total, day) => total + day.freeStudentIdsForWindow.length, 0) ?? 0;
 
-  return <AppShell currentUser={currentUser}>
-    <PageHeader eyebrow="MVP-B · 灵活检索" title="查找空闲时间" description="按成员、时间段或参与人群检索数据库中的真实课表。空闲时长只计算上课节次，不把课间休息算进去。" />
+  return <AppShell currentUser={currentUser} guest={guest}>
+    <PageHeader eyebrow={guest ? "游客只读访问" : "MVP-B · 灵活检索"} title="查找空闲时间" description="按成员、时间段或参与人群检索数据库中的真实课表。空闲时长只计算上课节次，不把课间休息算进去。" />
 
     <div className="availability-mode-tabs" role="tablist" aria-label="选择检索方式">
       {(Object.keys(modeCopy) as SearchMode[]).map((item) => <button key={item} role="tab" aria-selected={mode === item} className={mode === item ? "active" : ""} onClick={() => { setMode(item); setError(""); setLoading(true); }}>

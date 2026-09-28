@@ -100,7 +100,7 @@ export async function getPersonalSchedule(studentId: number): Promise<PersonalSc
   };
 }
 
-export async function getDashboardData(studentId: number, requestedWeek?: number) {
+export async function getDashboardData(studentId: number | null, requestedWeek?: number) {
   const config = await getCurrentScheduleConfig();
   if (!config) return null;
   const members = (await getMemberDirectory()).filter((member) => member.registered);
@@ -149,7 +149,7 @@ export async function getDashboardData(studentId: number, requestedWeek?: number
     statusDate: today,
     currentTimeIso: now.toISOString(),
     week,
-    selectedStudentId: members.some((member) => member.id === studentId) ? studentId : members[0]?.id ?? null,
+    selectedStudentId: studentId !== null && members.some((member) => member.id === studentId) ? studentId : members[0]?.id ?? null,
     stats: { registered: members.length, todayFree: todayFreeCount, commonRangeCount, todayInSemester: todayInfo !== null },
   };
 }

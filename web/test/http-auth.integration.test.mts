@@ -9,6 +9,8 @@ const password = process.env.POSTGRES_PASSWORD;
 if (!password) throw new Error("缺少 POSTGRES_PASSWORD，无法运行 HTTP 集成测试。");
 process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/schedule_test`;
 process.env.BETTER_AUTH_SECRET = "http-integration-test-secret-at-least-32-characters";
+process.env.AUTH_RATE_LIMIT_MAX = "100";
+process.env.AUTH_DISABLE_RATE_LIMIT = "1";
 
 let dispatch: (request: Request) => Promise<Response> = async () => new Response("Test server is starting", { status: 503 });
 
@@ -57,10 +59,12 @@ const { eq } = await import("drizzle-orm");
 const { auth } = await import("@/lib/auth");
 const scheduleRoute = await import("@/app/api/students/[id]/schedule/route");
 const courseRoute = await import("@/app/api/my/courses/[id]/route");
+const guestRoute = await import("@/app/api/guest-session/route");
 
 dispatch = async (request) => {
   const url = new URL(request.url);
   if (url.pathname.startsWith("/api/auth/")) return auth.handler(request);
+  if (url.pathname === "/api/guest-session" && request.method === "POST") return guestRoute.POST();
 
   const scheduleMatch = url.pathname.match(/^\/api\/students\/(\d+)\/schedule$/);
   if (scheduleMatch && request.method === "GET") {
@@ -111,12 +115,6 @@ before(async () => {
   await db.insert(periods).values(Array.from({ length: 13 }, (_, index) => ({
     semesterId, periodNo: index + 1, name: `第${index + 1}节`, startTime: "08:00:00", endTime: "08:45:00",
   })));
-  await db.insert(students).values([
-    { name: "甲", studentNo: "20001" },
-    { name: "乙", studentNo: "20002" },
-    { name: "丙", studentNo: "20003" },
-  ]);
-
   const registrationA = await register("甲", "20001", "password-a-123");
   const registrationB = await register("乙", "20002", "password-b-123");
   assert.equal(registrationA.response.status, 200);
@@ -169,7 +167,29 @@ test("HTTP：未登录不能查看成员课表", async () => {
   assert.equal(response.status, 401);
 });
 
-test("HTTP：同一名册项并发注册只能成功一次", async () => {
+test("HTTP：游客可查看成员课表，但不能修改课程", async () => {
+  const guestResponse = await fetch(`${origin}/api/guest-session`, { method: "POST" });
+  assert.equal(guestResponse.status, 200);
+  const guestCookie = guestResponse.headers.get("set-cookie")?.split(";", 1)[0];
+  assert.ok(guestCookie);
+
+  const viewResponse = await fetch(`${origin}/api/students/${studentB}/schedule?semester=${semesterId}&week=1`, {
+    headers: { cookie: guestCookie },
+  });
+  assert.equal(viewResponse.status, 200);
+  const viewBody = await viewResponse.json() as { data: { member: { studentNo: string } } };
+  assert.equal(viewBody.data.member.studentNo, "20*02");
+  assert.notEqual(viewBody.data.member.studentNo, "20002");
+
+  const writeResponse = await fetch(`${origin}/api/my/courses/${courseB}`, {
+    method: "PATCH",
+    headers: { cookie: guestCookie, "content-type": "application/json" },
+    body: JSON.stringify({ semesterId, name: "游客越权修改", weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] }),
+  });
+  assert.equal(writeResponse.status, 401);
+});
+
+test("HTTP：同一学号并发注册只能成功一次", async () => {
   const attempts = await Promise.all([
     register("丙", "20003", "password-c-123"),
     register("丙", "20003", "password-c-456"),
@@ -181,4 +201,12 @@ test("HTTP：同一名册项并发注册只能成功一次", async () => {
   assert.equal(boundRoster.length, 1);
   assert.ok(boundRoster[0].userId);
   assert.equal(createdUsers.length, 1);
+});
+
+test("HTTP：不在预置名册中的成员可直接注册并自动加入目录", async () => {
+  const registration = await register("丁", "20004", "password-d-123");
+  assert.equal(registration.response.status, 200);
+  const [created] = await db.select({ name: students.name, userId: students.userId }).from(students).where(eq(students.studentNo, "20004"));
+  assert.equal(created?.name, "丁");
+  assert.ok(created?.userId);
 });

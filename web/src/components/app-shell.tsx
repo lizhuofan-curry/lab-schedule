@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, Clock3, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, X } from "lucide-react";
 import { useState } from "react";
 import { BciLogo } from "@/components/bci-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { signOut } from "@/lib/auth-client";
 
 const navigation = [
   { href: "/dashboard", label: "课表总览", icon: LayoutDashboard },
@@ -15,9 +16,18 @@ const navigation = [
   { href: "/registration", label: "注册情况", icon: UserRoundCheck },
 ];
 
-export function AppShell({ children, currentUser = { name: "李卓凡", studentNo: "2510250877" } }: { children: React.ReactNode; currentUser?: { name: string; studentNo: string } }) {
+export function AppShell({ children, currentUser = { name: "李卓凡", studentNo: "2510250877" }, guest = false }: { children: React.ReactNode; currentUser?: { name: string; studentNo: string }; guest?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const visibleNavigation = guest ? navigation.filter((item) => item.href !== "/my-schedule" && item.href !== "/registration") : navigation;
+
+  async function exit() {
+    if (guest) await fetch("/api/guest-session", { method: "DELETE" });
+    else await signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="app-frame">
@@ -39,7 +49,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
         </div>
 
         <nav className="nav-list" aria-label="主要导航">
-          {navigation.map(({ href, label, icon: Icon }) => {
+          {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
               <Link key={href} href={href} className={active ? "nav-item active" : "nav-item"} onClick={() => setOpen(false)}>
@@ -54,16 +64,16 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
         <div className="sidebar-footer">
           <div className="current-user">
             <div className="avatar">{currentUser.name.slice(0, 1)}</div>
-            <div><strong>{currentUser.name}</strong><small>{currentUser.studentNo}</small></div>
+            <div><strong>{currentUser.name}</strong><small>{guest ? "只读访问" : currentUser.studentNo}</small></div>
           </div>
-          <Link href="/login" className="icon-button" aria-label="退出登录"><LogOut size={18} /></Link>
+          <button type="button" className="icon-button" aria-label={guest ? "退出游客模式" : "退出登录"} onClick={exit}><LogOut size={18} /></button>
         </div>
       </aside>
 
       {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="关闭导航" />}
       <main className="main-content">{children}</main>
-      <nav className="mobile-bottom-nav" aria-label="手机端主要导航">
-        {navigation.map(({ href, label, icon: Icon }) => {
+      <nav className={`mobile-bottom-nav ${guest ? "guest-nav" : ""}`} aria-label="手机端主要导航">
+        {visibleNavigation.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>

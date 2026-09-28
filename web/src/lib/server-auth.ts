@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { students } from "@/db/schema";
 import { auth } from "@/lib/auth";
 
+export const GUEST_COOKIE = "bci_guest_access";
+
 export type CurrentMember = {
   userId: string;
   studentId: number;
@@ -28,6 +30,28 @@ export async function getCurrentMember(requestHeaders?: Headers): Promise<Curren
     studentNo: student.studentNo,
     name: student.name,
   };
+}
+
+function hasGuestCookie(headerValue: string | null) {
+  return headerValue?.split(";").some((item) => item.trim() === `${GUEST_COOKIE}=1`) ?? false;
+}
+
+export async function isGuestViewer(requestHeaders?: Headers) {
+  const source = requestHeaders ?? await headers();
+  return hasGuestCookie(source.get("cookie"));
+}
+
+export async function getCurrentViewer(requestHeaders?: Headers) {
+  const member = await getCurrentMember(requestHeaders);
+  if (member) return { kind: "member" as const, member };
+  if (await isGuestViewer(requestHeaders)) return { kind: "guest" as const, member: null };
+  return null;
+}
+
+export function maskStudentNo(studentNo: string | null) {
+  if (!studentNo) return null;
+  if (studentNo.length <= 4) return "****";
+  return `${studentNo.slice(0, 2)}${"*".repeat(Math.min(6, studentNo.length - 4))}${studentNo.slice(-2)}`;
 }
 
 export function unauthorized(message = "请先登录。") {

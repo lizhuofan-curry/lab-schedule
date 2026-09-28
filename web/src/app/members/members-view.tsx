@@ -15,14 +15,15 @@ function memberColor(id: number) {
   return avatarColors[(id - 1) % avatarColors.length];
 }
 
-export function MembersView({ currentStudentId, members, semester, periods, initialWeek, initialStudentId, initialCourses }: {
-  currentStudentId: number;
+export function MembersView({ currentStudentId, members, semester, periods, initialWeek, initialStudentId, initialCourses, guest = false }: {
+  currentStudentId: number | null;
   members: ScheduleMember[];
   semester: ScheduleSemester;
   periods: SchedulePeriod[];
   initialWeek: number;
   initialStudentId: number | null;
   initialCourses: ScheduleCourse[];
+  guest?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(initialStudentId);
   const [week, setWeek] = useState(initialWeek);
@@ -82,7 +83,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
 
   return (
     <>
-      <PageHeader eyebrow="实验室成员" title="查看成员课表" description="所有登录成员都能查看课表；课程内容只有本人可以修改。" actions={<WeekSwitcher semesterName={semester.name} week={week} weekCount={semester.weekCount} onChange={changeWeek} />} />
+      <PageHeader eyebrow={guest ? "游客只读访问" : "实验室成员"} title="查看成员课表" description={guest ? "游客可以查看课表，完整学号和课程维护功能仅对注册成员开放。" : "所有登录成员都能查看课表；课程内容只有本人可以修改。"} actions={<WeekSwitcher semesterName={semester.name} week={week} weekCount={semester.weekCount} onChange={changeWeek} />} />
       <div className="members-page-layout">
         <aside className="panel member-browser">
           <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>

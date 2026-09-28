@@ -80,7 +80,7 @@ web/
 │  └─ proxy.ts
 ├─ test/                     权限集成测试（连独立 schedule_test 库，tsx + @/ 别名）
 ├─ drizzle/                   Drizzle 迁移产物
-├─ scripts/                   seed-initial-data.mjs（初始化名册/学期/节次）
+├─ scripts/                   seed-initial-data.mjs（初始化学期/节次，可选导入已有成员）
 ├─ Dockerfile / Caddyfile / compose.yaml
 └─ package.json / drizzle.config.ts / …
 ```
@@ -96,7 +96,7 @@ web/
 | `course-service.ts` | 课程增删改：学期/节次配置校验、冲突检测、审计写入 |
 | `schedule-service.ts` / `schedule-types.ts` | 周课表查询与类型 |
 | `availability-service.ts` / `availability-types.ts` | 空闲 / 共同空闲 / 连续节次计算与类型 |
-| `registration-service.ts` / `registration-summary.ts` | 注册匹配名册与注册统计 |
+| `registration-service.ts` / `registration-summary.ts` | 开放注册后的成员绑定与注册统计 |
 
 ## 4. 一次请求的链路（以「新增课程」为例）
 
