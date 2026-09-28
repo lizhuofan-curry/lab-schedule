@@ -19,6 +19,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@tesseract.js-data/chi_sim": "^1.0.0",
     "better-auth": "latest",
     "cheerio": "^1.2.0",
     "date-fns": "latest",
@@ -30,6 +31,7 @@
     "postgres": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "tesseract.js": "^7.0.0",
     "zod": "latest"
   },
   "devDependencies": {

@@ -43,6 +43,13 @@
       "when": 1790552440257,
       "tag": "0005_fancy_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790562000000,
+      "tag": "0006_add_image_import_source",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,7 @@ const { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semester
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
-const { confirmScheduleImport, previewPastedScheduleImport, ScheduleImportError } = await import("@/lib/schedule-import-service");
+const { confirmScheduleImport, previewImageScheduleImport, previewPastedScheduleImport, ScheduleImportError } = await import("@/lib/schedule-import-service");
 
 let studentA = 0;
 let studentB = 0;
@@ -179,5 +179,24 @@ test("粘贴表格确认导入创建 text 来源版本且不影响他人", async
   const otherCourses = await db.select().from(courses).where(eq(courses.studentId, studentB));
   assert.equal(version.versionNo, 3);
   assert.equal(storedVersion.source, "text");
+  assert.equal(otherCourses.some((course) => course.name === "乙的课"), true);
+});
+
+test("图片草稿预览不写库，确认后创建 image 来源版本且不影响他人", async () => {
+  const member = { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" };
+  const beforeVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  const preview = await previewImageScheduleImport([{
+    "课程名称": "图片识别课程", "教师": "张老师", "地点": "A203", "星期": "周三",
+    "开始节次": "3", "结束节次": "4", "周次": "1-18", "备注": "", "颜色": "#dce8e3",
+  }], member, "schedule.png");
+  assert.equal(preview.errorCount, 0);
+  assert.equal(preview.validCourses.length, 1);
+  const afterPreviewVersions = await db.select().from(scheduleVersions).where(eq(scheduleVersions.studentId, studentA));
+  assert.deepEqual(afterPreviewVersions, beforeVersions);
+
+  const version = await confirmScheduleImport({ member, source: "image", fileName: "schedule.png", imported: preview.validCourses });
+  const [storedVersion] = await db.select().from(scheduleVersions).where(eq(scheduleVersions.id, version.id));
+  const otherCourses = await db.select().from(courses).where(eq(courses.studentId, studentB));
+  assert.equal(storedVersion.source, "image");
   assert.equal(otherCourses.some((course) => course.name === "乙的课"), true);
 });

@@ -20,7 +20,15 @@ mock.module("@/lib/schedule-import-service", {
     ScheduleImportError: class ScheduleImportError extends Error {},
     previewScheduleImport: async () => { throw new Error("不应执行"); },
     previewPastedScheduleImport: async () => { throw new Error("不应执行"); },
+    previewImageScheduleImport: async () => { throw new Error("不应执行"); },
     confirmScheduleImport: async () => { throw new Error("不应执行"); },
+  },
+});
+
+mock.module("@/lib/image-ocr-service", {
+  namedExports: {
+    ImageOcrError: class ImageOcrError extends Error {},
+    recognizeScheduleImage: async () => { throw new Error("不应执行"); },
   },
 });
 
@@ -35,6 +43,8 @@ const { GET } = await import("@/app/api/students/[id]/schedule/route");
 const importPreviewRoute = await import("@/app/api/my/schedule-import/preview/route");
 const importConfirmRoute = await import("@/app/api/my/schedule-import/confirm/route");
 const textPreviewRoute = await import("@/app/api/my/schedule-import/text-preview/route");
+const imageOcrRoute = await import("@/app/api/my/schedule-import/image-ocr/route");
+const imagePreviewRoute = await import("@/app/api/my/schedule-import/image-preview/route");
 const henuSyncRoute = await import("@/app/api/my/henu-sync/route");
 
 test("未登录不能查看成员课表（返回 401）", async () => {
@@ -55,4 +65,8 @@ test("未登录不能预览或确认课表导入", async () => {
   assert.equal(confirm.status, 401);
   const textPreview = await textPreviewRoute.POST(new Request("http://localhost/api/my/schedule-import/text-preview", { method: "POST" }));
   assert.equal(textPreview.status, 401);
+  const imageOcr = await imageOcrRoute.POST(new Request("http://localhost/api/my/schedule-import/image-ocr", { method: "POST" }));
+  const imagePreview = await imagePreviewRoute.POST(new Request("http://localhost/api/my/schedule-import/image-preview", { method: "POST" }));
+  assert.equal(imageOcr.status, 401);
+  assert.equal(imagePreview.status, 401);
 });

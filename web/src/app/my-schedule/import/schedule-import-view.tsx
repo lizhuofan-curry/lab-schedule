@@ -41,7 +41,7 @@ export function ScheduleImportView() {
   }
 
   async function previewText() {
-    if (!pastedText.trim()) { setError("请先从教务系统或 Excel 复制课表，并粘贴到文本框。 "); return; }
+    if (!pastedText.trim()) { setError("请先从教务系统或 Excel 复制课表，并粘贴到文本框。"); return; }
     setLoading(true); setError(""); setPreview(null); setSuccess(null); setAcknowledged(false);
     try {
       const response = await fetch("/api/my/schedule-import/text-preview", {

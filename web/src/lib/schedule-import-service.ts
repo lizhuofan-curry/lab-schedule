@@ -12,7 +12,7 @@ import type { CurrentMember } from "@/lib/server-auth";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 200;
 
-export type ScheduleImportSource = "csv" | "xlsx" | "henu" | "text";
+export type ScheduleImportSource = "csv" | "xlsx" | "henu" | "text" | "image";
 
 export class ScheduleImportError extends Error {
   constructor(public code: "FILE_INVALID" | "IMPORT_INVALID" | "SEMESTER_NOT_FOUND", message: string) { super(message); }
@@ -110,6 +110,26 @@ export async function previewPastedScheduleImport(text: string, member: CurrentM
   return {
     source: "text" as const,
     fileName: "粘贴的教务课表",
+    semester: config.semester,
+    rows,
+    validCourses,
+    errorCount: rows.filter((row) => row.errors.length > 0).length,
+    diff: summarizeImportDiff(validCourses, existing),
+  };
+}
+
+export async function previewImageScheduleImport(records: ImportRecord[], member: CurrentMember, fileName: string) {
+  if (records.length === 0 || records.length > MAX_IMPORT_ROWS) {
+    throw new ScheduleImportError("FILE_INVALID", `请保留 1-${MAX_IMPORT_ROWS} 门课程后再生成预览。`);
+  }
+  const config = await currentConfiguration();
+  const rows = validateImportRecords(records, config.semester.id, config.semester.weekCount, config.periodNos);
+  const existing = await db.select(courseSelection()).from(courses)
+    .where(and(eq(courses.studentId, member.studentId), eq(courses.semesterId, config.semester.id)));
+  const validCourses = rows.filter((row) => row.course && row.errors.length === 0).map((row) => row.course!);
+  return {
+    source: "image" as const,
+    fileName: fileName.slice(0, 255),
     semester: config.semester,
     rows,
     validCourses,

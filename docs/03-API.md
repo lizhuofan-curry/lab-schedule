@@ -1,4 +1,4 @@
-# API 设计（MVP-B）
+# API 设计（MVP-B / v1）
 
 统一返回 JSON。未登录返回 `401`，无权限返回 `403`，资源不存在返回 `404`，业务校验失败返回 `422`，并包含面向用户的中文 `message`。
 
@@ -60,9 +60,11 @@ MVP-A 不提供成员名册写入接口；名册由项目部署初始化数据�
 | GET | `/api/my/schedule-import/template?format=xlsx|csv` | 登录 | 下载固定列模板 |
 | POST | `/api/my/schedule-import/preview` | 登录 | 上传最大 2 MB 文件，逐行校验并返回冲突和差异，不写数据库 |
 | POST | `/api/my/schedule-import/text-preview` | 登录 | 解析最大 10 万字符的复制表格，识别常见表头和组合上课时间，返回预览但不写数据库 |
+| POST | `/api/my/schedule-import/image-ocr` | 登录 | 上传最大 8 MB PNG/JPG/WebP，在服务端本地识别文字并返回临时候选，不写数据库 |
+| POST | `/api/my/schedule-import/image-preview` | 登录 | 校验本人修正后的图片识别草稿，返回冲突与差异，不写数据库 |
 | POST | `/api/my/schedule-import/confirm` | 登录 | 再次校验预览数据，用完整导入结果替换本人当前学期课表并创建版本 |
 
-模板列固定为：课程名称、教师、地点、星期、开始节次、结束节次、周次、备注、颜色。复制表格可使用常见别名，并支持 `1-18周 五[3-5] 教室` 格式的组合字段。确认接口 `source` 可为 `csv`、`xlsx`、`text` 或 `henu`，不接受 `student_id`，所有者只能来自服务端会话。一次最多 200 门课程；错误、重复或冲突存在时拒绝确认。
+模板列固定为：课程名称、教师、地点、星期、开始节次、结束节次、周次、备注、颜色。复制表格可使用常见别名，并支持 `1-18周 五[3-5] 教室` 格式的组合字段。确认接口 `source` 可为 `csv`、`xlsx`、`text`、`henu` 或 `image`，不接受 `student_id`，所有者只能来自服务端会话。一次最多 200 门课程；错误、重复或冲突存在时拒绝确认。图片和 OCR 原文不进入确认载荷，不持久化。
 
 ## 6. 河大课表同步（实验功能）
 
