@@ -23,7 +23,7 @@
 
 ## 3. 首次发布
 
-1. 在本地 `web` 目录完成 `npm ci`、`npm run lint`、`npm test`、`npm run test:integration` 和 `npm run build`。
+1. 在本地 `web` 目录完成 `npm ci`、`npm run lint`、`npm test`、`npm run test:integration`、`npm run test:performance` 和 `npm run build`。
 2. 将 `web` 目录上传到服务器，例如 `/opt/tongpin-schedule`；不要上传 `.env`、`.next`、`node_modules` 或 `backups`。
 3. 在服务器复制并编辑生产配置：
 

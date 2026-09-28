@@ -148,3 +148,4 @@ Route Handler 返回 200 + 新课程 JSON
 
 - **纯函数单测**（`npm test`）：`src/lib/*.test.ts`，Node 内置 `node --test`；覆盖周次标准化、冲突规则、写接口校验、空闲与注册统计等。
 - **权限集成测试**（`npm run test:integration`）：`test/*.test.mts`，`tsx` 解析 `@/` 别名并加载 `server-only`（`--conditions react-server`），连接独立 `schedule_test` 库（db 通过 `127.0.0.1:5433` loopback 映射）；覆盖 A 查看 B、A 不能改/删 B、未登录返回 401。
+- **性能基线**（`npm run test:performance`）：在独立 `schedule_test` 库生成 100 名成员、每人 100 门课程，测量成员目录、单人课表、课表总览和 10/100 人共同空闲；运行前后均清理测试数据，固定阈值用于发现明显性能倒退。

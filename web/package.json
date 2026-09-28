@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "node --test --experimental-strip-types src/lib/*.test.ts",
     "test:integration": "node --experimental-test-module-mocks --import tsx --conditions react-server --test --test-concurrency=1 test/*.test.mts",
+    "test:performance": "node --import tsx --conditions react-server scripts/performance-baseline.mts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node scripts/seed-initial-data.mjs",

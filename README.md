@@ -260,6 +260,7 @@ Compose 会依次启动 PostgreSQL、执行迁移与初始化，再启动 Next.j
 | `npm run lint` | 运行 ESLint |
 | `npm test` | 运行业务规则单元测试 |
 | `npm run test:integration` | 运行权限与数据库集成测试 |
+| `npm run test:performance` | 在独立测试库运行 100 人、每人 100 门课程的性能基线并自动清理 |
 | `npm run build` | 执行 TypeScript 检查和生产构建 |
 | `npm run db:generate` | 根据 schema 生成迁移 |
 | `npm run db:migrate` | 执行数据库迁移 |
@@ -308,6 +309,7 @@ Compose 会依次启动 PostgreSQL、执行迁移与初始化，再启动 Next.j
 | `npm run lint` | TypeScript / React 代码规范和常见问题 | 否 |
 | `npm test` | 周次展开、课程冲突、空闲区间、模板与复制表格解析、年级归类和河大课表网格解析 | 否 |
 | `npm run test:integration` | A 查看 B、A 不能修改 B、未登录拒绝、文件 / 粘贴导入隔离、河大同步身份与凭据边界 | 是，使用独立测试库 |
+| `npm run test:performance` | 100 人、每人 100 门课程下的成员目录、单人课表、总览和共同空闲查询 | 是，使用独立测试库并自动清理 |
 | `npm run build` | TypeScript 检查、Next.js 生产编译和页面生成 | 视环境配置而定 |
 
 空闲相关测试至少应持续覆盖：单双周课程、被课程打断的非连续空闲、跨学期日期、多人占用并集和真实分钟数。权限测试必须始终从服务端会话所有权出发，不能只验证前端是否隐藏按钮。
@@ -319,8 +321,11 @@ cd web
 npm run lint
 npm test
 npm run test:integration
+npm run test:performance
 npm run build
 ```
+
+2026-09-28 本机 Docker PostgreSQL 基线（3 次取中位数）：100 人成员目录 4.7 ms、单人 100 门周课表 10.9 ms、100 人 / 10000 门课表总览 125.8 ms、10 人共同空闲 21.8 ms、100 人共同空闲 55.1 ms。该结果用于发现明显性能倒退，不等同于云服务器容量承诺。
 
 生产构建通过只说明代码能够完成本地生产编译；真正的部署完成还需要分别核对容器状态、数据库迁移、健康接口、HTTPS 和浏览器关键流程。
 
