@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/repository-icon.svg" alt="同频课表 Logo" width="112" />
+
 # 同频课表
 
 ### 为实验室和课题组找到真正能约在一起的时间
