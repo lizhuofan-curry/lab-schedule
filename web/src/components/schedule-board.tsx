@@ -87,7 +87,7 @@ export function ScheduleBoard<T extends ScheduleItem>({ courses, week, periods, 
         {displayPeriods.map((period) => (
           <div className="period-label" key={period.periodNo} style={{ gridRow: rowForPeriod(period.periodNo) }}>
             <strong>{period.name.replace("节", "")}</strong>
-            {!compact && <small>{period.startTime.slice(0, 5)}–{period.endTime.slice(0, 5)}</small>}
+            <small>{period.startTime.slice(0, 5)}–{period.endTime.slice(0, 5)}</small>
           </div>
         ))}
 

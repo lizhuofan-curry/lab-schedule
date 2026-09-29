@@ -654,6 +654,7 @@ body {
 .compact .schedule-day span { font-size: 12px; }
 .compact .schedule-day small { font-size: 9px; }
 .compact .period-label strong { font-size: 13px; }
+.compact .period-label small { margin-top: 3px; font-size: 7px; letter-spacing: -.04em; white-space: nowrap; }
 .compact .course-card strong { font-size: 11px; }
 .compact .course-card span { margin-top: 2px; font-size: 9px; }
 .schedule-scroll { scrollbar-width: thin; scrollbar-color: #afbeb7 transparent; overscroll-behavior-inline: contain; }
