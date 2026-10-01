@@ -116,6 +116,7 @@ erDiagram
 | semester → period | 1 : * | `periods.semester_id` | `restrict` | 每学期一套节次 |
 | semester → course | 1 : * | `courses.semester_id` | `restrict` | 课程归属学期 |
 | user → audit_log | 1 : * | `audit_logs.actor_user_id` | `set null` | 操作者删除后审计保留 |
+| student → group | * : * | `group_members.student_id` / `group_members.group_id` | `restrict` / `cascade` | 成员可加入多个组；解散组删除关系 |
 
 认证四表（`session` / `account` / `verification`）由 Better Auth 管理，均以 `user_id` 关联 `user` 并 `on delete cascade`。
 
@@ -136,6 +137,8 @@ erDiagram
 | courses | `(semester_id, weekday)` 索引 | 按日期/星期计算空闲 |
 | courses | GIN `(weeks)` | 周次包含 / 相交查询（BR-05） |
 | audit_logs | `(actor_user_id, created_at)`、`(entity_type, entity_id)` | 审计查询 |
+| groups | `name` 唯一、`created_by_student_id` 索引 | 小组目录与创建来源 |
+| group_members | `(group_id, student_id)` 唯一、`group_id` 组长部分唯一、两个外键索引 | 防重复成员、每组唯一组长、双向查询 |
 
 ## 4. MVP-B 预留（不进入当前阶段）
 

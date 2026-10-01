@@ -10,6 +10,7 @@ Student 1 ── * Course
 Semester 1 ── * Period
 Semester 1 ── * Course
 User 1 ── * AuditLog
+Student * ── * Group（通过 GroupMember；每组恰好一个 leader）
 
 MVP-B：Student + Semester 1 ── * ScheduleVersion 1 ── * CourseSnapshot
 ```
@@ -55,6 +56,16 @@ Better Auth 管理基础账号字段。系统不设置管理员角色；登录�
 
 `id`、`actor_user_id`、`action`、`entity_type`、`entity_id`、`before jsonb`、`after jsonb`、`ip_hash`、`created_at`。只追加，不在普通业务中更新或删除。
 
+### groups
+
+`id`、`name`、`created_by_student_id`、`created_at`、`updated_at`。名称必填、最长 40 字且唯一；`created_by_student_id` 仅记录创建来源，当前管理权限由 `group_members.role` 决定。为创建者外键建立索引。
+
+### group_members
+
+`id`、`group_id`、`student_id`、`role`、`created_at`。`role` 仅允许 `leader` / `member`；唯一约束 `(group_id, student_id)` 防止重复加入，部分唯一索引确保每组最多一个 `leader`。`group_id`、`student_id` 均建立查询索引。删除小组级联删除成员关系；成员记录仍采用停用优先策略，不因移出或解散小组删除。
+
+创建小组时在一个短事务中同时写入 `groups`、组长成员关系和 AuditLog。转让组长时先把原组长改为普通成员，再把目标组员改为组长，并在同一事务中写审计；外部请求不参与这些事务。
+
 ## 3. 冲突判断
 
 同一 `student_id + semester_id + weekday` 下，排除当前记录后，同时满足：
@@ -77,5 +88,6 @@ existing.end_period >= new.start_period
 
 - 删除账号不级联删除成员课表；优先禁用账号。
 - 删除成员前必须确认无课表，生产环境建议改为 `enabled=false`。
+- 删除成员前还必须确认不在任何小组；生产环境停用成员后，其关系保留但不参与目录与空闲计算。
 - 学期存在课程时禁止删除。
 - 删除课程写入审计后物理删除；历史审计保留前值。

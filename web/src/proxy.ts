@@ -23,6 +23,7 @@ export const config = {
     "/my-schedule/:path*",
     "/availability/:path*",
     "/members/:path*",
+    "/groups/:path*",
     "/registration/:path*",
   ],
 };

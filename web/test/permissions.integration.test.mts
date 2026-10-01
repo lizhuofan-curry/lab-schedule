@@ -11,11 +11,12 @@ process.env.DATABASE_URL = `postgresql://schedule:${password}@127.0.0.1:5433/sch
 const { db, sqlClient } = await import("@/db");
 const { migrate } = await import("drizzle-orm/postgres-js/migrator");
 const { and, eq } = await import("drizzle-orm");
-const { auditLogs, courses, courseSnapshots, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
+const { auditLogs, courses, courseSnapshots, groupMembers, groups, periods, scheduleVersions, semesters, students, users } = await import("@/db/schema");
 const { saveCourse, removeCourse, DuplicateCourseError } = await import("@/lib/course-service");
 const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
 const { confirmScheduleImport, previewImageScheduleImport, previewPastedScheduleImport, ScheduleImportError } = await import("@/lib/schedule-import-service");
+const { addGroupMember, createGroup, getGroupDirectory, GroupServiceError, renameGroup, transferGroupLeader } = await import("@/lib/group-service");
 
 let studentA = 0;
 let studentB = 0;
@@ -77,6 +78,32 @@ test("成员不能删除他人课程（A 删 B 被拒绝）", async () => {
     () => removeCourse({ courseId: courseBId, studentId: studentA, actorUserId: "ua" }),
     (error: Error) => error.message === "FORBIDDEN_OWNER",
   );
+});
+
+test("小组对成员公开，但只有当前组长可以改名和维护成员", async () => {
+  const actorA = { userId: "ua", studentId: studentA, studentNo: "10001", name: "甲" };
+  const actorB = { userId: "ub", studentId: studentB, studentNo: "10002", name: "乙" };
+  const group = await createGroup("测试项目组", actorA);
+  await addGroupMember(group.id, studentB, actorA);
+
+  const viewedByB = await getGroupDirectory(studentB);
+  assert.equal(viewedByB[0].name, "测试项目组");
+  assert.equal(viewedByB[0].members.length, 2);
+  assert.equal(viewedByB[0].canManage, false);
+
+  await assert.rejects(
+    () => renameGroup(group.id, "乙不能改的名称", actorB),
+    (error: Error) => error instanceof GroupServiceError && error.code === "FORBIDDEN_GROUP_LEADER",
+  );
+  const renamed = await renameGroup(group.id, "甲修改后的项目组", actorA);
+  assert.equal(renamed.name, "甲修改后的项目组");
+
+  await transferGroupLeader(group.id, studentB, actorA);
+  const memberships = await db.select().from(groupMembers).where(eq(groupMembers.groupId, group.id));
+  assert.equal(memberships.find((item) => item.studentId === studentB)?.role, "leader");
+  assert.equal(memberships.find((item) => item.studentId === studentA)?.role, "member");
+  const [storedGroup] = await db.select().from(groups).where(eq(groups.id, group.id));
+  assert.equal(storedGroup.name, "甲修改后的项目组");
 });
 
 test("成员可修改自己的课程", async () => {

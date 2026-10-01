@@ -35,6 +35,20 @@ MVP-A 不提供独立的成员目录写入接口；成员由开放注册流程�
 
 写接口请求不接受 `student_id`。服务端从会话解析本人 `student_id`，标准化 `weeks`，校验学期/节次和冲突后再写入，同时记录 AuditLog。
 
+## 3.1 项目小组
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/groups` | 成员或游客 | 查看小组、组长和启用组员；游客学号脱敏 |
+| POST | `/api/groups` | 登录成员 | 创建小组，当前成员自动成为组长 |
+| PATCH | `/api/groups/:id` | 当前组长 | 修改小组名称 |
+| DELETE | `/api/groups/:id` | 当前组长 | 解散小组，不删除成员或课表 |
+| POST | `/api/groups/:id/members` | 当前组长 | 添加启用成员；请求体 `{ studentId }` |
+| DELETE | `/api/groups/:id/members/:studentId` | 当前组长 | 移除普通组员；不能直接移除组长 |
+| POST | `/api/groups/:id/leader` | 当前组长 | 把组长转让给已有组员；请求体 `{ studentId }` |
+
+所有写接口使用 Zod 校验，并从服务端会话判断操作者是否为当前组长。客户端传入的组长身份不可信。成员可加入多个小组；同组不能重复加入。所有写操作与成员关系变更在短事务中完成并写 AuditLog。
+
 ## 4. 空闲查询
 
 `POST /api/availability/query`
@@ -90,3 +104,7 @@ MVP-A 不提供管理配置 API。学期和节次由部署初始化脚本导入�
 - `FORBIDDEN_STUDENT`：请求同步的学号不是当前登录成员本人。
 - `IDENTITY_MISMATCH`：教务系统返回身份与当前登录成员不一致。
 - `HENU_LOGIN_FAILED`：统一认证失败、需要验证码或外部系统暂时不可用。
+- `GROUP_NAME_TAKEN`：已经存在同名小组。
+- `FORBIDDEN_GROUP_LEADER`：当前成员不是该组组长。
+- `GROUP_MEMBER_EXISTS`：成员已经在该小组中。
+- `CANNOT_REMOVE_LEADER`：必须先转让组长，不能直接移除当前组长。

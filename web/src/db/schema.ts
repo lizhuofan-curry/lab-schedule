@@ -76,6 +76,33 @@ export const students = pgTable("students", {
   check("students_name_not_blank", sql`length(trim(${table.name})) > 0`),
 ]);
 
+export const groups = pgTable("groups", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  createdByStudentId: bigint("created_by_student_id", { mode: "number" }).notNull().references(() => students.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("groups_name_uidx").on(table.name),
+  index("groups_created_by_student_id_idx").on(table.createdByStudentId),
+  check("groups_name_not_blank", sql`length(trim(${table.name})) > 0`),
+  check("groups_name_length_valid", sql`char_length(${table.name}) <= 40`),
+]);
+
+export const groupMembers = pgTable("group_members", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  groupId: bigint("group_id", { mode: "number" }).notNull().references(() => groups.id, { onDelete: "cascade" }),
+  studentId: bigint("student_id", { mode: "number" }).notNull().references(() => students.id, { onDelete: "restrict" }),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("group_members_group_student_uidx").on(table.groupId, table.studentId),
+  uniqueIndex("group_members_one_leader_uidx").on(table.groupId).where(sql`${table.role} = 'leader'`),
+  index("group_members_group_id_idx").on(table.groupId),
+  index("group_members_student_id_idx").on(table.studentId),
+  check("group_members_role_valid", sql`${table.role} in ('leader', 'member')`),
+]);
+
 export const semesters = pgTable("semesters", {
   id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
@@ -194,6 +221,18 @@ export const studentRelations = relations(students, ({ one, many }) => ({
   user: one(users, { fields: [students.userId], references: [users.id] }),
   courses: many(courses),
   scheduleVersions: many(scheduleVersions),
+  groupMemberships: many(groupMembers),
+  createdGroups: many(groups),
+}));
+
+export const groupRelations = relations(groups, ({ one, many }) => ({
+  createdBy: one(students, { fields: [groups.createdByStudentId], references: [students.id] }),
+  members: many(groupMembers),
+}));
+
+export const groupMemberRelations = relations(groupMembers, ({ one }) => ({
+  group: one(groups, { fields: [groupMembers.groupId], references: [groups.id] }),
+  student: one(students, { fields: [groupMembers.studentId], references: [students.id] }),
 }));
 
 export const courseRelations = relations(courses, ({ one }) => ({

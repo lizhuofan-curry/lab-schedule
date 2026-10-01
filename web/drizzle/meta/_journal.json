@@ -50,6 +50,13 @@
       "when": 1790562000000,
       "tag": "0006_add_image_import_source",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790841378945,
+      "tag": "0007_bright_big_bertha",
+      "breakpoints": true
     }
   ]
 }

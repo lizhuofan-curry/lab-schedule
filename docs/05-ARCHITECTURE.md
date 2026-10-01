@@ -63,7 +63,7 @@ web/
 ├─ src/
 │  ├─ app/                    页面与接口（App Router）
 │  │  ├─ layout.tsx / page.tsx / globals.css
-│  │  ├─ login/ register/ dashboard/ members/
+│  │  ├─ login/ register/ dashboard/ members/ groups/
 │  │  ├─ my-schedule/ availability/ registration/
 │  │  └─ api/
 │  │     ├─ auth/[...all]/route.ts         Better Auth 认证入口
@@ -72,6 +72,7 @@ web/
 │  │     ├─ students/route.ts              成员搜索
 │  │     ├─ students/[id]/schedule/route.ts 查看他人课表
 │  │     ├─ availability/query/route.ts    空闲查询
+│  │     ├─ groups/**/route.ts             小组目录、组员和组长维护
 │  │     ├─ registration-stats/route.ts    注册统计
 │  │     └─ health/route.ts                健康检查
 │  ├─ components/             复用组件（app-shell、schedule-board、course-dialog、week-switcher、empty-state）
@@ -97,6 +98,8 @@ web/
 | `schedule-service.ts` / `schedule-types.ts` | 周课表查询与类型 |
 | `availability-service.ts` / `availability-types.ts` | 空闲 / 共同空闲 / 连续节次计算与类型 |
 | `registration-service.ts` / `registration-summary.ts` | 开放注册后的成员绑定与注册统计 |
+| `group-schema.ts` / `group-policy.ts` | 小组写入校验与纯权限规则 |
+| `group-service.ts` | 小组目录、组长授权、短事务和审计 |
 
 ## 4. 一次请求的链路（以「新增课程」为例）
 
@@ -129,6 +132,7 @@ Route Handler 返回 200 + 新课程 JSON
 - 匿名只可访问登录/注册；其余接口由 `getCurrentMember()` 返回 `null` 时统一 `401`。
 - 所有权判断只依据会话解析出的 `studentId`，写接口不接受也不使用请求中的 `student_id`（见 [03-API.md](03-API.md)）。
 - 系统无管理员角色，所有注册成员权限平等（BR-03）。
+- 小组写操作是资源角色授权：任意成员可创建，只有该组当前 `leader` 可改名、维护成员、转让或解散；这不是全局管理员角色（BR-20）。
 
 ### 5.2 事务与审计
 

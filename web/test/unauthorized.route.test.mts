@@ -42,6 +42,14 @@ mock.module("@/lib/henu-sync-service", {
   },
 });
 
+mock.module("@/lib/group-service", {
+  namedExports: {
+    GroupServiceError: class GroupServiceError extends Error {},
+    getGroupDirectory: async () => { throw new Error("不应执行"); },
+    createGroup: async () => { throw new Error("不应执行"); },
+  },
+});
+
 const { GET } = await import("@/app/api/students/[id]/schedule/route");
 const importPreviewRoute = await import("@/app/api/my/schedule-import/preview/route");
 const importConfirmRoute = await import("@/app/api/my/schedule-import/confirm/route");
@@ -49,6 +57,7 @@ const textPreviewRoute = await import("@/app/api/my/schedule-import/text-preview
 const imageOcrRoute = await import("@/app/api/my/schedule-import/image-ocr/route");
 const imagePreviewRoute = await import("@/app/api/my/schedule-import/image-preview/route");
 const henuSyncRoute = await import("@/app/api/my/henu-sync/route");
+const groupsRoute = await import("@/app/api/groups/route");
 
 test("未登录不能查看成员课表（返回 401）", async () => {
   const request = new Request("http://localhost/api/students/1/schedule?semester=1&week=1");
@@ -72,4 +81,11 @@ test("未登录不能预览或确认课表导入", async () => {
   const imagePreview = await imagePreviewRoute.POST(new Request("http://localhost/api/my/schedule-import/image-preview", { method: "POST" }));
   assert.equal(imageOcr.status, 401);
   assert.equal(imagePreview.status, 401);
+});
+
+test("未登录不能查看或创建小组", async () => {
+  const read = await groupsRoute.GET(new Request("http://localhost/api/groups"));
+  const create = await groupsRoute.POST(new Request("http://localhost/api/groups", { method: "POST" }));
+  assert.equal(read.status, 401);
+  assert.equal(create.status, 401);
 });

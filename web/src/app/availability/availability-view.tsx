@@ -43,16 +43,20 @@ function formatDate(date: string) {
   return `${month}月${day}日`;
 }
 
-export function AvailabilityView({ members, semester, currentUser, guest = false }: {
+export function AvailabilityView({ members, savedGroups, initialGroupId, semester, currentUser, guest = false }: {
   members: ScheduleMember[];
+  savedGroups: Array<{ id: number; name: string; studentIds: number[] }>;
+  initialGroupId: number | null;
   semester: ScheduleSemester;
   currentUser: { name: string; studentNo: string };
   guest?: boolean;
 }) {
-  const [mode, setMode] = useState<SearchMode>("person");
+  const initialGroup = savedGroups.find((group) => group.id === initialGroupId);
+  const [mode, setMode] = useState<SearchMode>(initialGroup ? "group" : "person");
   const [grade, setGrade] = useState<GradeFilter>("all");
   const [personId, setPersonId] = useState<number | null>(members[0]?.id ?? null);
-  const [selected, setSelected] = useState<number[]>(members.map((member) => member.id));
+  const [selected, setSelected] = useState<number[]>(initialGroup?.studentIds ?? members.map((member) => member.id));
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(initialGroup?.id ?? null);
   const [weekday, setWeekday] = useState(() => getISODay(new Date()));
   const [week, setWeek] = useState(() => Math.max(1, Math.min(semester.weekCount, Math.floor(differenceInCalendarDays(new Date(), parseISO(semester.startDate)) / 7) + 1)));
   const [minimumMinutes, setMinimumMinutes] = useState(45);
@@ -133,6 +137,7 @@ export function AvailabilityView({ members, semester, currentUser, guest = false
         {mode === "person" && <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={personId === member.id ? "select-person selected" : "select-person"} onClick={() => { setPersonId(member.id); setLoading(true); setError(""); }}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{personId === member.id && <Check size={14} />}</i></button>)}</div>}
 
         {mode === "group" && <>
+          {savedGroups.length > 0 && <label className="field saved-group-select"><span>快速选择小组</span><select value={selectedGroupId ?? ""} onChange={(event) => { const groupId = Number(event.target.value); const group = savedGroups.find((item) => item.id === groupId); setSelectedGroupId(group?.id ?? null); if (group) setSelected(group.studentIds); setLoading(true); setError(""); }}><option value="">手动选择成员</option>{savedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}（{group.studentIds.length} 人）</option>)}</select></label>}
           <div className="selection-actions"><span>已选 {selected.length} 人</span><button className="text-link" onClick={() => { setSelected(visibleMembers.map((member) => member.id)); setLoading(true); setError(""); }}>选择当前年级全部</button></div>
           <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={selected.includes(member.id) ? "select-person selected" : "select-person"} onClick={() => toggleMember(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{selected.includes(member.id) && <Check size={14} />}</i></button>)}</div>
         </>}

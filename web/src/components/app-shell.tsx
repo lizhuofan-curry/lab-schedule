@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, Clock3, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, X } from "lucide-react";
+import { CalendarDays, Clock3, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, UsersRound, X } from "lucide-react";
 import { useState } from "react";
 import { BciLogo } from "@/components/bci-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -13,6 +13,7 @@ const navigation = [
   { href: "/my-schedule", label: "我的课表", icon: CalendarDays },
   { href: "/availability", label: "找共同空闲", icon: Clock3 },
   { href: "/members", label: "实验室成员", icon: Users },
+  { href: "/groups", label: "项目小组", icon: UsersRound },
   { href: "/registration", label: "注册情况", icon: UserRoundCheck },
 ];
 
@@ -21,6 +22,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const visibleNavigation = guest ? navigation.filter((item) => item.href !== "/my-schedule" && item.href !== "/registration") : navigation;
+  const mobileNavigation = visibleNavigation.filter((item) => item.href !== "/registration");
 
   async function exit() {
     if (guest) await fetch("/api/guest-session", { method: "DELETE" });
@@ -73,7 +75,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
       {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="关闭导航" />}
       <main className="main-content">{children}</main>
       <nav className={`mobile-bottom-nav ${guest ? "guest-nav" : ""}`} aria-label="手机端主要导航">
-        {visibleNavigation.map(({ href, label, icon: Icon }) => {
+        {mobileNavigation.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
