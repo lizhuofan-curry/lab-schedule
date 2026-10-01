@@ -50,6 +50,12 @@ mock.module("@/lib/group-service", {
   },
 });
 
+mock.module("@/lib/group-schedule-service", {
+  namedExports: {
+    getGroupWeekSchedule: async () => { throw new Error("不应执行"); },
+  },
+});
+
 const { GET } = await import("@/app/api/students/[id]/schedule/route");
 const importPreviewRoute = await import("@/app/api/my/schedule-import/preview/route");
 const importConfirmRoute = await import("@/app/api/my/schedule-import/confirm/route");
@@ -58,6 +64,7 @@ const imageOcrRoute = await import("@/app/api/my/schedule-import/image-ocr/route
 const imagePreviewRoute = await import("@/app/api/my/schedule-import/image-preview/route");
 const henuSyncRoute = await import("@/app/api/my/henu-sync/route");
 const groupsRoute = await import("@/app/api/groups/route");
+const groupScheduleRoute = await import("@/app/api/groups/[id]/schedule/route");
 
 test("未登录不能查看成员课表（返回 401）", async () => {
   const request = new Request("http://localhost/api/students/1/schedule?semester=1&week=1");
@@ -88,4 +95,12 @@ test("未登录不能查看或创建小组", async () => {
   const create = await groupsRoute.POST(new Request("http://localhost/api/groups", { method: "POST" }));
   assert.equal(read.status, 401);
   assert.equal(create.status, 401);
+});
+
+test("未登录不能查看小组叠加课表", async () => {
+  const response = await groupScheduleRoute.GET(
+    new Request("http://localhost/api/groups/1/schedule?week=1"),
+    { params: Promise.resolve({ id: "1" }) },
+  );
+  assert.equal(response.status, 401);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRightLeft, Crown, Pencil, Plus, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, Crown, Pencil, Plus, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { GroupDirectoryItem } from "@/lib/group-service";
 import type { ScheduleMember } from "@/lib/schedule-service";
@@ -93,7 +93,10 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
           </div>}
 
           <footer>
-            <Link className="text-link" href={`/availability?group=${group.id}`}>查询小组共同空闲</Link>
+            <div className="group-card-links">
+              <Link className="text-link" href={`/groups/${group.id}`}><CalendarRange size={15} /> 查看叠加课表</Link>
+              <Link className="text-link" href={`/availability?group=${group.id}`}>查询共同空闲</Link>
+            </div>
             {group.canManage && <button className="danger-link" disabled={busy} onClick={() => { if (window.confirm(`确认解散“${group.name}”？此操作不会删除成员课表。`)) void perform(() => requestJson(`/api/groups/${group.id}`, { method: "DELETE" })); }}><Trash2 size={15} /> 解散小组</button>}
           </footer>
         </article>;

@@ -17,6 +17,7 @@ const { getMemberWeekSchedule } = await import("@/lib/schedule-service");
 const { courseInputSchema } = await import("@/lib/course-schema");
 const { confirmScheduleImport, previewImageScheduleImport, previewPastedScheduleImport, ScheduleImportError } = await import("@/lib/schedule-import-service");
 const { addGroupMember, createGroup, getGroupDirectory, GroupServiceError, renameGroup, transferGroupLeader } = await import("@/lib/group-service");
+const { getGroupWeekSchedule } = await import("@/lib/group-schedule-service");
 
 let studentA = 0;
 let studentB = 0;
@@ -90,6 +91,12 @@ test("小组对成员公开，但只有当前组长可以改名和维护成员",
   assert.equal(viewedByB[0].name, "测试项目组");
   assert.equal(viewedByB[0].members.length, 2);
   assert.equal(viewedByB[0].canManage, false);
+
+  const schedule = await getGroupWeekSchedule(group.id, 1, studentB);
+  assert.equal(schedule.group.members.length, 2);
+  assert.equal(schedule.courses.length, 1);
+  assert.equal(schedule.courses[0].name, "乙的课");
+  assert.equal(schedule.courses[0].memberName, "乙");
 
   await assert.rejects(
     () => renameGroup(group.id, "乙不能改的名称", actorB),
