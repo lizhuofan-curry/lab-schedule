@@ -1093,6 +1093,35 @@ export async function readNotifications(ids: number[], actor: CurrentMember) {
       );
   });
 }
+
+export async function deleteNotifications(ids: number[], actor: CurrentMember) {
+  return db.transaction(async (tx) => {
+    await validActor(tx, actor);
+    // Lock the entire confirmation set in stable order before validating/deleting.
+    const rows = await tx
+      .select({ id: taskNotifications.id, recipientId: taskNotifications.recipientId, readAt: taskNotifications.readAt })
+      .from(taskNotifications)
+      .where(inArray(taskNotifications.id, ids))
+      .orderBy(asc(taskNotifications.id))
+      .for("update");
+    if (rows.some((row) => row.recipientId !== actor.studentId))
+      fail("FORBIDDEN_NOTIFICATION", "只能删除自己的已读消息，请刷新后重新选择。", 403);
+    if (rows.some((row) => row.readAt === null))
+      fail("NOTIFICATION_UNREAD", "所选消息包含未读消息，请先阅读并标为已读后重试。", 409);
+    if (!rows.length) return { deleted: 0 };
+    const deleted = await tx.delete(taskNotifications)
+      .where(and(inArray(taskNotifications.id, rows.map((row) => row.id)), eq(taskNotifications.recipientId, actor.studentId), isNotNull(taskNotifications.readAt)))
+      .returning({ id: taskNotifications.id });
+    await tx.insert(auditLogs).values({
+      actorUserId: actor.userId,
+      action: "notification.delete",
+      entityType: "notification",
+      entityId: String(actor.studentId),
+      after: JSON.stringify({ requested: ids.length, deleted: deleted.length }),
+    });
+    return { deleted: deleted.length };
+  });
+}
 export async function fileRecord(id: string, actor: CurrentMember) {
   const [file] = await db.select().from(taskFiles).where(eq(taskFiles.id, id));
   if (!file || file.deletingAt !== null || (file.taskId === null && file.creatorId !== actor.studentId))

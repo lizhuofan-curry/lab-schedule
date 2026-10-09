@@ -13,7 +13,7 @@ if (!password) throw new Error("缺少本地测试数据库配置。");
 const runId = Date.now().toString();
 const database = `schedule_v2_browser_${runId}`;
 const origin = "http://127.0.0.1:3017";
-const output = path.resolve("test-results/v2");
+const output = path.resolve(process.env.TASK_BROWSER_OUTPUT || "test-results/v2");
 await mkdir(output, { recursive: true });
 const uploads = path.resolve(`data/browser-${runId}`);
 const admin = postgres({
@@ -470,6 +470,84 @@ try {
   await a.getByRole("button", { name: "将本页消息标为已读" }).click();
   await expect(a.locator(".task-toolbar > span")).toHaveText("0条未读");
   checks.push("超过200条消息能看更早历史并分批标记已读");
+  for (const width of [1440, 390]) {
+    await a.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    await sql`insert into task_notifications (recipient_id,task_id,round_id,title,message,read_at)
+      select ${aid},${groupTaskId},${groupTask.rounds[0].id},${`v22-${width}-`} || n,
+        '消息清理验收' || n, case when n <= 410 then now() else null end from generate_series(1,412) n`;
+    await go(a, "/notifications");
+    await expect(a.locator(".task-message")).toHaveCount(200);
+    const firstPage = await api(ca, "/api/notifications");
+    const loadedRead = firstPage.messages.filter((m: { readAt: string | null }) => m.readAt);
+    await expect(a.locator(".task-message.unread input[type=checkbox]").first()).toBeDisabled();
+    const checkbox = a.getByRole("checkbox", { name: `选择消息：${loadedRead[0].title}（${loadedRead[0].id}）`, exact: true });
+    await checkbox.focus();
+    await a.keyboard.press("Space");
+    await expect(checkbox).toBeChecked();
+    await a.getByRole("button", { name: "删除所选", exact: true }).click();
+    const modal = a.getByRole("dialog", { name: "删除已读消息", exact: true });
+    await expect(modal).toContainText("确认删除这1条已读消息");
+    await expect(modal.getByRole("button", { name: "取消", exact: true })).toBeFocused();
+    const bounds = await modal.boundingBox();
+    expect(Math.abs(bounds!.x + bounds!.width / 2 - width / 2)).toBeLessThan(3);
+    expect(Math.abs(bounds!.y + bounds!.height / 2 - (width === 390 ? 844 : 1000) / 2)).toBeLessThan(3);
+    await a.screenshot({ path: path.join(output, `v22-confirm-${width}.png`) });
+    await a.keyboard.press("Escape");
+    await expect(modal).not.toBeVisible();
+    await expect(checkbox).toBeChecked();
+    await a.getByRole("button", { name: "删除所选", exact: true }).click();
+    // An actual HTTP failure must keep both the confirmation and stored data.
+    let failDelete = true;
+    await a.route("**/api/notifications", async (route) => {
+      if (route.request().method() === "DELETE" && failDelete) {
+        failDelete = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "测试连接失败，请重试。" }) });
+      } else await route.continue();
+    });
+    await modal.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(modal.getByRole("alert")).toContainText("测试连接失败");
+    expect((await sql`select id from task_notifications where id=${loadedRead[0].id}`).length).toBe(1);
+    await modal.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(a.locator(".task-message")).toHaveCount(199);
+    expect((await sql`select id from task_notifications where id=${loadedRead[0].id}`).length).toBe(0);
+    await a.unroute("**/api/notifications");
+    checks.push(`${width}px单条多选、键盘取消、居中默认取消焦点、失败保留及重试删除`);
+
+    await a.getByRole("button", { name: "删除已加载的已读消息", exact: true }).click();
+    await expect(modal).toContainText(`确认删除这${loadedRead.length - 1}条已读消息`);
+    const [arrived] = await sql`insert into task_notifications(recipient_id,task_id,round_id,title,message)
+      values(${aid},${groupTaskId},${groupTask.rounds[0].id},${`${width}px确认期间新消息`},'保留新未读') returning id`;
+    await modal.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(a.locator(".task-message")).toHaveCount(2);
+    await expect(a.getByRole("button", { name: "删除已加载的已读消息", exact: true })).toBeDisabled();
+    expect((await sql`select id from task_notifications where id=${arrived.id}`).length).toBe(1);
+    const [older] = await sql`select count(*)::int as n from task_notifications where recipient_id=${aid} and id < ${firstPage.nextCursor} and read_at is not null`;
+    expect(older.n).toBeGreaterThan(200);
+    await a.getByRole("button", { name: "查看更早消息", exact: true }).click();
+    await expect(a.locator(".task-message")).toHaveCount(202);
+    await a.getByRole("button", { name: "查看更早消息", exact: true }).click();
+    await expect.poll(() => a.locator(".task-message").count()).toBeGreaterThan(202);
+    await a.getByRole("checkbox", { name: "全选已加载的已读消息", exact: true }).check();
+    const selectedCount = await a.locator(".task-message input[type=checkbox]:checked").count();
+    expect(selectedCount).toBeGreaterThan(200);
+    await a.getByRole("button", { name: "删除所选", exact: true }).click();
+    // A second device deletes the same fixed set before the first confirms.
+    const selected = await a.locator(".task-message input[type=checkbox]:checked").evaluateAll((inputs) => inputs.map((input) => Number(input.getAttribute("aria-label")!.match(/（(\d+)）$/)![1])));
+    const otherDevice = await ca.request.delete(`${origin}/api/notifications`, { data: { ids: selected, confirm: true }, headers: { origin } });
+    expect(otherDevice.ok()).toBeTruthy();
+    await modal.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(a.locator(".task-message input[type=checkbox]:checked")).toHaveCount(0);
+    await a.getByRole("button", { name: "刷新", exact: true }).click();
+    await expect(a.getByText(`${width}px确认期间新消息`, { exact: true })).toBeVisible();
+    const noOverflow = await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    expect(noOverflow).toBeTruthy();
+    await a.screenshot({ path: path.join(output, `v22-notifications-${width}.png`), fullPage: true });
+    checks.push(`${width}px一键仅清理已加载已读，保留新未读及更早历史，删除游标仍可翻页，跨200条多选与多设备幂等`);
+  }
+  await a.setViewportSize({ width: 1440, height: 1000 });
   // Personal work is independent of task acceptance and uses existing member page.
   await go(a, "/members");
   await expect(
@@ -714,7 +792,7 @@ try {
     expect(await b.evaluate(() => "markdownAttack" in window || "textAttack" in window)).toBe(false);
   }
   checks.push("Markdown发布/修改/编辑预览真实保存；桌面及390px资料MD/TXT/PNG、PDF画布实际文字及两页翻页、Office下载回退和脚本拒绝");
-  for (const resource of ["cmaps/UniGB-UCS2-H.bcmap", "standard_fonts/FoxitSans.pfb", "wasm/openjpeg.wasm"]) {
+  for (const resource of ["cmaps/UniGB-UCS2-H.bcmap", "standard_fonts/LiberationSans-Regular.ttf", "wasm/openjpeg.wasm"]) {
     const response = await ca.request.get(`${origin}/api/pdf-assets/${resource}`);
     expect(response.status(), resource).toBe(200);
     expect((await response.body()).length).toBeGreaterThan(0);

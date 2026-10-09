@@ -7,7 +7,17 @@ import {
   taskSubject,
 } from "./task-rules.ts";
 import { MAX_TASK_FILE_BYTES, validateTaskFile, taskFilePreviewType } from "./task-file-rules.ts";
-import { taskCreateSchema, taskCommandSchema } from "./task-schema.ts";
+import { taskCreateSchema, taskCommandSchema, notificationDeleteSchema } from "./task-schema.ts";
+test("消息清理确认集合拒绝未确认、伪造接收人、重复及越界ID", () => {
+  assert.deepEqual(notificationDeleteSchema.parse({ ids: [1, 2], confirm: true }).ids, [1, 2]);
+  for (const body of [
+    { ids: [], confirm: true }, { ids: [1] }, { ids: [1], confirm: false },
+    { ids: [1], confirm: true, recipientId: 2 }, { ids: [1, 1], confirm: true },
+    { ids: [0], confirm: true }, { ids: [1.5], confirm: true },
+    { ids: [Number.MAX_SAFE_INTEGER + 1], confirm: true },
+    { ids: Array.from({ length: 10001 }, (_, i) => i + 1), confirm: true },
+  ]) assert.equal(notificationDeleteSchema.safeParse(body).success, false);
+});
 test("预览仅允许固定安全MIME，大小写扩展一致且Office和HTML不能内联", () => {
   assert.equal(taskFilePreviewType("论文.PDF"), "application/pdf");
   assert.equal(taskFilePreviewType("图.jpeg"), "image/jpeg");

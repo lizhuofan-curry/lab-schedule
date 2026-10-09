@@ -2,9 +2,10 @@ import { memberFor, readInput, taskError } from "@/lib/task-http";
 import {
   notifications,
   readNotifications,
+  deleteNotifications,
   TaskError,
 } from "@/lib/task-service";
-import { notificationReadSchema } from "@/lib/task-schema";
+import { notificationReadSchema, notificationDeleteSchema } from "@/lib/task-schema";
 export async function GET(request: Request) {
   try {
     const actor = await memberFor(request);
@@ -31,6 +32,18 @@ export async function POST(request: Request) {
       actor,
     );
     return Response.json({ data: { read: true } });
+  } catch (e) {
+    return taskError(e);
+  }
+}
+export async function DELETE(request: Request) {
+  try {
+    const actor = await memberFor(request, true);
+    const input = await readInput(request, notificationDeleteSchema);
+    return Response.json(
+      { data: await deleteNotifications(input.ids, actor) },
+      { headers: { "cache-control": "no-store" } },
+    );
   } catch (e) {
     return taskError(e);
   }

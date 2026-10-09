@@ -1,155 +1,50 @@
-# 系统架构（MVP-A）
+# 系统架构
 
-版本：1.0
-状态：开发基线
-日期：2026-09-27
+Next.js App Router＋TypeScript/Tailwind，Better Auth学号登录，PostgreSQL 17＋Drizzle，Docker Compose＋Caddy。数据/API细节见[02](02-DATABASE.md)、[03](03-API.md)。
 
-本文描述「同频课表」MVP-A 的整体结构、分层、目录组织与一次请求的完整链路，供新开发者快速建立全局认识。需求见 [01-PRD.md](01-PRD.md)，数据模型见 [02-DATABASE.md](02-DATABASE.md) 与 [06-ER_DIAGRAM.md](06-ER_DIAGRAM.md)，接口契约见 [03-API.md](03-API.md)。
+## 1. 请求链路
 
-## 1. 分层架构
-
-```text
-┌────────────────┐
-│  浏览器（用户） │  登录成员 / 匿名（匿名仅登录、注册页）
-└───────┬────────┘
-        │ HTTPS (443)
-┌───────▼────────┐
-│     Caddy      │  反向代理 + 自动 HTTPS；仅暴露 80/443，5432 不映射公网
-└───────┬────────┘
-        │ 内部网络
-┌───────▼─────────────────────────┐
-│      Next.js 应用容器            │
-│  ┌──────────────────────────┐   │
-│  │ App Router 页面层        │   │  app/**/page.tsx、*-view.tsx、components/
-│  └────────────┬─────────────┘   │
-│  ┌────────────▼─────────────┐   │
-│  │ Route Handler 接口层     │   │  app/api/**/route.ts（HTTP 契约）
-│  └────────────┬─────────────┘   │
-│  ┌────────────▼─────────────┐   │
-│  │ Service 业务层           │   │  lib/*-service.ts（规则、事务、审计）
-│  └────────────┬─────────────┘   │
-│  ┌────────────▼─────────────┐   │
-│  │ Drizzle ORM 数据层       │   │  db/schema.ts、db/index.ts
-│  └────────────┬─────────────┘   │
-└───────────────┼─────────────────┘
-                │ 内部 TCP 5432
-┌───────────────▼─────────────────┐
-│           PostgreSQL            │
-└─────────────────────────────────┘
+```mermaid
+flowchart LR
+    B[浏览器：成员或游客] -->|HTTPS| C[Caddy]
+    C --> N[Next页面 / Route Handler]
+    N --> A[会话与Zod校验]
+    A --> S[业务服务：授权 / 事务 / 审计]
+    S --> D[(PostgreSQL)]
+    S --> F[鉴权私有附件]
 ```
 
-- **页面层**只负责渲染与交互，不直接访问数据库。
-- **接口层**只做会话解析、Zod 入参校验、调用服务层、映射错误码与状态码。
-- **业务层**承载全部业务规则（冲突、周次标准化、审计、权限），是唯一允许开启事务的地方。
-- **数据层**只包含 schema 定义与连接，不含业务逻辑。
+页面负责展示与交互；Route Handler解析身份和输入、调用服务、映射错误；服务负责规则和短事务；schema/连接在数据层。服务端页面可使用服务读取，客户端不直接访问数据库。
 
-## 2. 技术栈
+写入链路：会话确定操作者→Zod→服务端资源授权→版本/冲突校验→短事务写入与审计→明确成功或错误。外部网络和文件I/O不进入数据库事务。
 
-| 关注点 | 选型 |
+## 2. 目录职责
+
+| 目录或文件 | 职责 |
 | --- | --- |
-| 前端框架 | Next.js App Router + React |
-| 语言 | TypeScript |
-| 样式 | Tailwind CSS |
-| 认证 | Better Auth（学号 = username，内部合成邮箱，不展示） |
-| 数据库 | PostgreSQL |
-| ORM / 迁移 | Drizzle ORM + drizzle-kit |
-| 校验 | Zod |
-| 部署 | Docker Compose（app + postgres + caddy） |
+| `web/src/app`、`components` | 页面/API、课表、任务、消息、复用表单及居中确认 |
+| `web/src/lib/server-auth.ts`、`auth.ts` | 当前会话成员及Better Auth |
+| `course-*`、`schedule-*`、`availability-*` | 本人课程、周课表、时间冲突和空闲计算 |
+| `registration-*`、`group-*` | 注册统计、小组权限及课表汇总 |
+| `task-service.ts`、`task-schema.ts` | 任务状态、动态名单、成果、文件、消息及命令校验 |
+| `work-*` | 本人工作记录、近期读取和成员任务摘要 |
+| `web/src/db`、`drizzle` | 当前表定义、连接、不可修改的已执行迁移 |
+| `web/test`、`src/lib/*.test.ts` | 数据库/浏览器验收、纯规则单元 |
+| `web/scripts` | 初始化、备份恢复、文件校验及性能基线 |
 
-## 3. 目录组织
+以上`*-*`表示文件族，不要求新建对应目录。
 
-```text
-web/
-├─ src/
-│  ├─ app/                    页面与接口（App Router）
-│  │  ├─ layout.tsx / page.tsx / globals.css
-│  │  ├─ login/ register/ dashboard/ members/ groups/
-│  │  ├─ my-schedule/ availability/ registration/
-│  │  └─ api/
-│  │     ├─ auth/[...all]/route.ts         Better Auth 认证入口
-│  │     ├─ my/courses/route.ts            本人课程列表 / 新增
-│  │     ├─ my/courses/[id]/route.ts       本人课程修改 / 删除
-│  │     ├─ students/route.ts              成员搜索
-│  │     ├─ students/[id]/schedule/route.ts 查看他人课表
-│  │     ├─ availability/query/route.ts    空闲查询
-│  │     ├─ groups/**/route.ts             小组目录、组员和组长维护
-│  │     ├─ registration-stats/route.ts    注册统计
-│  │     └─ health/route.ts                健康检查
-│  ├─ components/             复用组件（app-shell、schedule-board、course-dialog、week-switcher、empty-state）
-│  ├─ db/                     schema.ts（表定义）、index.ts（连接）
-│  ├─ lib/                    服务与领域逻辑（见下）
-│  └─ proxy.ts
-├─ test/                     权限集成测试（连独立 schedule_test 库，tsx + @/ 别名）
-├─ drizzle/                   Drizzle 迁移产物
-├─ scripts/                   seed-initial-data.mjs（初始化学期/节次，可选导入已有成员）
-├─ Dockerfile / Caddyfile / compose.yaml
-└─ package.json / drizzle.config.ts / …
-```
+## 3. 一致性与存储
 
-`lib/` 内的职责划分：
+- 课程写入锁定本人范围，同一短事务校验周次/冲突并审计；整表导入额外保存完整版本，单条CRUD不建版本。
+- 任务和小组变更共用事务级advisory lock，管理用revision、成果用轮次及最新版本；结束名单固定，重开新轮。
+- 文件先私有落盘，再短事务核验额度与元数据；清理先标记、事务外删除、最后释放额度。历史关联不删除。
+- 消息删除按ID升序行锁，验证整批本人已读后删除；固定确认集合，缺失ID幂等，游标保持数值边界。
+- 本人工作记录使用revision防覆盖；他人仅近期，完成时间不随普通文字编辑刷新。
+- V3历史读取及AI分析未实现，不提前扩展现有接口或沿用OCR凭据。
 
-| 文件 | 职责 |
-| --- | --- |
-| `auth.ts` / `auth-client.ts` | 服务端与客户端的 Better Auth 实例 |
-| `server-auth.ts` | `getCurrentMember()`：从会话解析本人 `studentId`；`unauthorized` / `forbidden` 统一响应 |
-| `course-schema.ts` | 课程写接口的 Zod 校验与周次标准化输入 |
-| `course-rules.ts` | BR-05 冲突判定、BR-04 周次去重排序（纯函数，供 service 复用） |
-| `course-service.ts` | 课程增删改：学期/节次配置校验、冲突检测、审计写入 |
-| `schedule-service.ts` / `schedule-types.ts` | 周课表查询与类型 |
-| `availability-service.ts` / `availability-types.ts` | 空闲 / 共同空闲 / 连续节次计算与类型 |
-| `registration-service.ts` / `registration-summary.ts` | 开放注册后的成员绑定与注册统计 |
-| `group-schema.ts` / `group-policy.ts` | 小组写入校验与纯权限规则 |
-| `group-service.ts` | 小组目录、组长授权、短事务和审计 |
+## 4. 验证与运行
 
-## 4. 一次请求的链路（以「新增课程」为例）
+单元覆盖周次、冲突、时间和输入；集成覆盖会话/所有权/并发/分页；浏览器覆盖真实写入、手机交互和游客；恢复验证数据库与文件一致及真实HTTP访问。测试使用隔离库，证据在忽略的`web/test-results`。
 
-```text
-浏览器 POST /api/my/courses
-   │ ① 请求体（含 semesterId、weekday、startPeriod、endPeriod、weeks…）
-   ▼
-Route Handler
-   │ ② getCurrentMember()：由会话解析本人 userId + studentId（不信任请求里的 student_id）
-   │ ③ Zod 校验请求体；失败返回 422 + 中文 message
-   ▼
-course-service.saveCourse()
-   │ ④ 校验学期存在、周次 ≤ 学期周数、节次区间在 periods 内
-   │ ⑤ 开启事务：查同 student+semester+weekday 下节次重叠且周数组相交的课程
-   │ ⑥ 冲突则抛 CourseConflictError（BR-05）；否则写入 courses
-   │ ⑦ 同一事务内写入 audit_logs（BR-11）
-   ▼
-Drizzle ORM ──► PostgreSQL
-   │ ⑧ 提交事务，返回新课程
-   ▼
-Route Handler 返回 200 + 新课程 JSON
-```
-
-写接口统一遵循：会话确定所有者 → Zod 校验 → 服务层事务（校验 + 写入 + 审计）→ 错误码映射。
-
-## 5. 横切关注点
-
-### 5.1 认证与授权
-
-- 匿名只可访问登录/注册；其余接口由 `getCurrentMember()` 返回 `null` 时统一 `401`。
-- 所有权判断只依据会话解析出的 `studentId`，写接口不接受也不使用请求中的 `student_id`（见 [03-API.md](03-API.md)）。
-- 系统无管理员角色，所有注册成员权限平等（BR-03）。
-- 小组写操作是资源角色授权：任意成员可创建，只有该组当前 `leader` 可改名、维护成员、转让或解散；这不是全局管理员角色（BR-20）。
-
-### 5.2 事务与审计
-
-- 冲突校验与写入必须在同一短事务内完成，避免并发穿透（[02-DATABASE.md](02-DATABASE.md) 第 3 节）。
-- 事务保持短小，外部网络调用不放进事务。
-- 网页课程 CRUD 写 `audit_logs`；MVP-A 不创建 `schedule_versions`（BR-11）。
-
-### 5.3 错误码
-
-接口层把服务层抛出的业务错误映射为 `03-API.md` 第 6 节定义的错误码（`COURSE_CONFLICT`、`DUPLICATE_COURSE`、`FORBIDDEN_OWNER`、`OUTSIDE_SEMESTER` 等），前端据此展示可操作的中文提示。
-
-### 5.4 配置与密钥
-
-数据库连接串、Better Auth 密钥、域名等只存在于 `.env`，不进入 Git、日志、客户端包或截图（[04-DEPLOYMENT.md](04-DEPLOYMENT.md)）。
-
-### 5.5 测试
-
-- **纯函数单测**（`npm test`）：`src/lib/*.test.ts`，Node 内置 `node --test`；覆盖周次标准化、冲突规则、写接口校验、空闲与注册统计等。
-- **权限集成测试**（`npm run test:integration`）：`test/*.test.mts`，`tsx` 解析 `@/` 别名并加载 `server-only`（`--conditions react-server`），连接独立 `schedule_test` 库（db 通过 `127.0.0.1:5433` loopback 映射）；覆盖 A 查看 B、A 不能改/删 B、未登录返回 401。
-- **性能基线**（`npm run test:performance`）：在独立 `schedule_test` 库生成 100 名成员、每人 100 门课程，测量成员目录、单人课表、课表总览和 10/100 人共同空闲；运行前后均清理测试数据，固定阈值用于发现明显性能倒退。
+生产使用持久卷，私有文件不进入public，PDF依赖从本机包白名单提供。备份、发布和回退见[04](04-DEPLOYMENT.md)；当前测试及上线状态只看[07](07-TASKS.md)。

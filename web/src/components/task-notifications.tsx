@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { taskDate } from "@/lib/task-rules";
+import { ConfirmationDialog } from "./form-controls";
 type Message = {
   id: number;
   taskId: number;
@@ -21,12 +22,12 @@ type Inbox = {
   unread: number;
   nextCursor: number | null;
 };
-async function request<T>(body?: unknown, before?: number): Promise<T> {
+async function request<T>(body?: unknown, before?: number, method = "POST"): Promise<T> {
   const response = await fetch(
     before ? `/api/notifications?before=${before}` : "/api/notifications",
     body
       ? {
-          method: "POST",
+          method,
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
         }
@@ -158,8 +159,20 @@ export function NotificationInbox() {
   const [data, setData] = useState<Inbox | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<number[] | null>(null);
+  const [notice, setNotice] = useState("");
+  const operation = useRef(false);
+  const selectAll = useRef<HTMLInputElement>(null);
+  const readIds = data?.messages.filter((m) => m.readAt).map((m) => m.id) ?? [];
+  const selectedIds = readIds.filter((id) => selected.includes(id));
+  useEffect(() => {
+    if (selectAll.current)
+      selectAll.current.indeterminate = selectedIds.length > 0 && selectedIds.length < readIds.length;
+  }, [selectedIds.length, readIds.length]);
   async function loadMore() {
-    if (!data?.nextCursor) return;
+    if (!data?.nextCursor || operation.current) return;
+    operation.current = true;
     setBusy(true);
     try {
       const more = await request<Inbox>(undefined, data.nextCursor);
@@ -180,15 +193,25 @@ export function NotificationInbox() {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      operation.current = false;
       setBusy(false);
     }
   }
   async function refresh() {
+    if (operation.current) return;
+    operation.current = true;
+    setBusy(true);
     try {
       setData(await request<Inbox>());
+      setSelected([]);
+      setNotice("");
       setError("");
+      window.dispatchEvent(new Event("task-notifications-changed"));
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      operation.current = false;
+      setBusy(false);
     }
   }
   useEffect(() => {
@@ -205,17 +228,57 @@ export function NotificationInbox() {
     };
   }, []);
   async function mark(ids: number[]) {
-    if (!ids.length) return;
+    if (!ids.length || operation.current) return;
+    operation.current = true;
     setBusy(true);
+    setNotice("");
     try {
       for (let offset = 0; offset < ids.length; offset += 200) {
-        await request({ ids: ids.slice(offset, offset + 200) });
+        const batch = ids.slice(offset, offset + 200);
+        await request({ ids: batch });
+        setData((d) => d ? {
+          ...d,
+          messages: d.messages.map((m) => batch.includes(m.id) ? { ...m, readAt: m.readAt ?? new Date().toISOString() } : m),
+          unread: Math.max(0, d.unread - d.messages.filter((m) => !m.readAt && batch.includes(m.id)).length),
+        } : d);
       }
-      await refresh();
+      setError("");
       window.dispatchEvent(new Event("task-notifications-changed"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      operation.current = false;
+      setBusy(false);
+    }
+  }
+  function confirmDelete(ids: number[]) {
+    if (!ids.length || operation.current) return;
+    if (ids.length > 10000) {
+      setError("一次最多清理10000条消息，请通过多选减少数量后重试。");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setPendingDelete([...ids]);
+  }
+  async function remove() {
+    if (!pendingDelete?.length || operation.current) return;
+    const ids = pendingDelete;
+    operation.current = true;
+    setBusy(true);
+    try {
+      await request({ ids, confirm: true }, undefined, "DELETE");
+      // Preserve the loaded range and cursor: newly arriving/unloaded rows are not targets.
+      setData((d) => d ? { ...d, messages: d.messages.filter((m) => !ids.includes(m.id)) } : d);
+      setSelected((previous) => previous.filter((id) => !ids.includes(id)));
+      setPendingDelete(null);
+      setNotice(`已清理所选的${ids.length}条已读消息。`);
+      setError("");
+      window.dispatchEvent(new Event("task-notifications-changed"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      operation.current = false;
       setBusy(false);
     }
   }
@@ -242,7 +305,25 @@ export function NotificationInbox() {
           </button>
         )}
       </div>
-      {error && (
+      {data && data.messages.length > 0 && (
+        <div className="notification-cleanup">
+          <label className="notification-select-all">
+            <input ref={selectAll} type="checkbox" aria-label="全选已加载的已读消息"
+              checked={readIds.length > 0 && selectedIds.length === readIds.length}
+              disabled={busy || !readIds.length}
+              onChange={(e) => setSelected(e.target.checked ? readIds : [])} />
+            全选已读
+          </label>
+          <span>已选{selectedIds.length}条 · 可清理{readIds.length}条</span>
+          <button className="button danger" disabled={busy || !selectedIds.length}
+            onClick={() => confirmDelete(selectedIds)}>删除所选</button>
+          <button className="button secondary" disabled={busy || !readIds.length}
+            onClick={() => confirmDelete(readIds)}>删除已加载的已读消息</button>
+          <p className="task-muted">仅清理当前已加载的已读消息；未读和更早未加载的消息会保留。</p>
+        </div>
+      )}
+      {notice && <p className="notification-notice" role="status">{notice}</p>}
+      {error && !pendingDelete && (
         <p className="task-error" role="alert">
           {error}
         </p>
@@ -253,7 +334,13 @@ export function NotificationInbox() {
             className={`task-message ${m.readAt ? "" : "unread"}`}
             key={m.id}
           >
-            <div>
+            <label className="notification-select" title={m.readAt ? "选择此条已读消息" : "请先阅读并标为已读"}>
+              <input type="checkbox" aria-label={`选择消息：${m.title}（${m.id}）`}
+                checked={selectedIds.includes(m.id)} disabled={busy || !m.readAt}
+                onChange={(e) => setSelected((previous) => e.target.checked ? [...previous, m.id] : previous.filter((id) => id !== m.id))} />
+              <span className="sr-only">{m.readAt ? "选择已读消息" : "未读消息不可删除"}</span>
+            </label>
+            <div className="notification-content">
               <Link
                 href={`/tasks/${m.taskId}`}
                 onClick={() => {
@@ -281,8 +368,8 @@ export function NotificationInbox() {
         {data && !data.messages.length && (
           <div className="task-empty">
             <Bell size={30} />
-            <h2>暂无消息</h2>
-            <p>指派、成果提交和验收变化会显示在这里。</p>
+            <h2>{data.nextCursor ? "已加载的消息已清理" : "暂无消息"}</h2>
+            <p>{data.nextCursor ? "可继续查看更早消息。" : "指派、成果提交和验收变化会显示在这里。"}</p>
           </div>
         )}
       </section>
@@ -295,6 +382,10 @@ export function NotificationInbox() {
           查看更早消息
         </button>
       )}
+      {pendingDelete && <ConfirmationDialog title="删除已读消息"
+        description={`确认删除这${pendingDelete.length}条已读消息？仅删除消息，不影响任务和成果；删除后无法恢复。`}
+        confirmLabel="确认删除" busy={busy} error={error}
+        onConfirm={() => void remove()} onClose={() => { setPendingDelete(null); setError(""); }} />}
     </>
   );
 }

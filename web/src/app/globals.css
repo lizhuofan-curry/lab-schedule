@@ -1054,6 +1054,20 @@ html[data-theme="night"] .leader-chip { background: #3a3324; color: #f0cc73; }
 .task-message.unread { background: color-mix(in srgb,var(--forest-2) 4%,var(--panel)); }
 .task-message p, .task-popup-item p { font-size: 15px; line-height: 1.65; margin-block: 6px; overflow-wrap: anywhere; }
 .task-message small { color: var(--ink-soft); font-size: 13px; }
+.notification-cleanup { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 18px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.notification-cleanup > span { color: var(--ink-soft); font-size: 14px; }
+.notification-cleanup > p { flex-basis: 100%; margin: 0; font-size: 14px; }
+.notification-select-all, .notification-select { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+.notification-select { flex: 0 0 32px; min-height: 44px; justify-content: center; align-self: flex-start; }
+.notification-select input, .notification-select-all input { width: 18px; height: 18px; accent-color: var(--forest); cursor: pointer; }
+.notification-select input:disabled { cursor: not-allowed; }
+.notification-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.notification-notice { color: var(--forest); margin-bottom: 18px; }
+@media (max-width: 600px) {
+  .notification-cleanup .button { width: 100%; }
+  .task-message { padding: 16px; gap: 10px; }
+  .task-message > .button { margin-left: 42px; }
+}
 .task-popup-item { padding-inline: 0; margin-bottom: 12px; }
 .task-popup-item strong { overflow-wrap: anywhere; }
 .task-popup-item .button { flex-shrink: 0; }

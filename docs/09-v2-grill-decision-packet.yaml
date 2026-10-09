@@ -1,0 +1,470 @@
+grill_decision_packet:
+  goal: HenuBCI任务协作及成员近期工作展示
+  problem_layer: 实验室任务协作与成员近期工作可见性的业务规则和权限边界
+  target_user_or_maintainer: 注册实验室成员、游客和项目维护者
+  stakeholders_and_owners:
+  - 发布者负责自己任务的要求、执行对象、验收、撤销和重新开启
+  - 执行成员负责对应成果；组长继续仅按现有权限维护小组
+  - 注册成员负责本人个人工作记录的填写、增删改和状态更新
+  - 项目维护者负责发布、容量、备份、恢复和后续维护
+  scope:
+  - 公告与指定任务；个人、多人、多组混选；人数上限或不限人数
+  - 动态小组执行名单；共同或逐人交付；文字、链接和10MB以内附件
+  - 要求变更、成果版本、打回、验收、撤销和多轮重新开启
+  - 站内消息及进入网站后的未读指派弹窗
+  - 游客仅查看任务列表的标题、发布者、截止时间和状态
+  - 现有成员页面保留课表，加入本人文字工作记录和承担的近期任务
+  - 个人记录为标题说明和进行中已完成暂停状态，仅本人可增删改
+  - 他人查看进行中暂停及近7天完成记录；本人完整管理全部自己的记录
+  - 任务展示进行中及滚动7天内完成；个人记录确认删除后无恢复入口
+  non_goals:
+  - 全站管理员、他人任务管理、游客写入或详情成果附件访问
+  - 邮件微信通知、自动截止提醒、实时推送和代码平台自动读取
+  - 任务自动排期、评论聊天、子任务和课表既有后续增量
+  - 独立会议纪要、个人记录附件评论额外提醒回收站以及会后录入人员的特殊权限
+  locked_decisions:
+    task_publish_authority: 所有注册成员
+    task_cancel_authority: 仅任务发布者
+    task_assignee_model: 公告自行领取；指定任务支持个人多人及多个小组
+    task_completion_unit: 发布时选择共同交付或逐人交付
+    task_completion_gate: 发布者验收通过；允许打回
+    task_visibility: 所有注册成员可查看任务及成果
+    guest_task_read_scope: 仅任务列表，不允许详情成果附件消息及写操作
+    announcement_claim_limit: 可设置人数上限或不限人数
+    announcement_claim_withdrawal: 领取后只能由发布者移出
+    direct_assignment_acceptance: 指派直接生效，无需接受
+    assignment_target_composition: 个人与多个小组可混选，按成员去重
+    group_assignee_membership: 进行中任务跟随当前小组成员变化
+    group_task_manual_override: 不单独覆盖组员，组内变化由有权限的组长处理
+    completed_task_membership_change: 已完成轮次固定名单
+    submission_channels: 文字链接和文件；PDF文本Markdown图片Office及CSV
+    attachment_file_size_limit: 10MiB（10485760字节）
+    task_deadline_policy: 可选，逾期仍可提交
+    submission_revision_policy: 通过前可随时重提，保留历史
+    announcement_completion_boundary: 发布者先结束领取，再满足全部成果完成条件
+    shared_submission_authority: 任意当前执行成员可提交共享成果
+    task_notification_scope: 站内消息及进入网站时的指派弹窗
+    assignment_popup_acknowledgement: 知道了或查看对应任务后标记已读
+    published_task_content_editing: 进行中可改标题说明截止时间附件，保留记录并通知
+    terminal_task_reopening: 已完成及已撤销均可由发布者重开
+    reopened_task_submission_validity: 旧成果仅保留历史，新轮重新提交与验收
+    reopened_announcement_claiming: 发布者选择是否恢复领取，原成员默认保留
+    meeting_content: 沿用原规则，由发布者直接发布任务
+    member_work_source: 本人填写工作记录，加上系统中的任务情况
+    meeting_editor_authority: 沿用原任务权限，不为两位会后录入人员赋予特殊角色
+    work_record_progress: 多条记录，每条为标题说明及进行中已完成暂停状态
+    member_task_scope: 该成员承担的进行中任务及近7天完成任务
+    member_work_visibility: 仅注册成员可查看个人记录，游客及未登录者不能读取
+    personal_work_scope: 对他人展示进行中暂停及近7天完成记录
+    recent_week_definition: 查询时刻向前7乘24小时的滚动窗口，不按自然周重置
+    personal_work_deletion: 本人确认后删除，无回收站和产品恢复入口
+    owner_history_management: 本人可查看增删改全部自己的记录，其他成员只有近期查看范围
+    increment_scope_confirmation: 沿用原成员页面保留课表，不增加会议纪要记录附件评论额外提醒
+    guest_task_fields: id/title/publisher/deadline/status/kind；其余详情禁止
+  tradeoffs_accepted:
+  - 指派直接生效但不增加全站管理员，所有权按任务限制
+  - 全体注册成员共享成果可见性，游客只获得列表
+  - 小组动态变化带来责任变动，历史轮次固定且目标来源必须去重
+  - 重提及重开保留历史，需承担存储和一致性维护成本
+  - 本人承担手动更新个人工作内容和状态的成本，系统不自动推断个人工作
+  - 接受本人可管理全部旧记录而他人只查看近期范围；确认删除后无产品恢复入口
+  primary_invariant: 服务端会话决定操作人；仅发布者管理验收自己的任务，仅当前执行成员提交；个人记录仅本人写，他人仅看近期；游客任务访问限列表且禁止个人记录
+  success_criteria:
+  - 公告与混选指定任务均可完成发布提交打回重提验收闭环
+  - 多组名单变化、停止领取及新轮任务完成条件一致
+  - 越权、游客详情附件访问、并发重复写入和旧版误验收均被拒绝
+  - 手机桌面流程、提醒已读及附件恢复通过
+  - 个人记录本人增改删、他人近期读取、本人完整管理及游客越权拒绝均通过
+  - 滚动7天临界点状态往返与文字修改不重置完成时间通过，成员页面保留课表且390px可用
+  proof_bar: 09-PRD-v2.md的V2-01～17、V2-W01～10；实际结果统一见07-TASKS.md
+  compatibility_posture: 保留现有课表账号小组课程及任务权限，不新增特殊角色；游客不获得个人记录权限，当前生产不因文档改变
+  rollout_rollback_posture: v2已上线；后续发布先成套备份并验收，应用回退保留任务、文件、记录和卷
+  support_and_maintenance_posture: 沿用现有维护者、目录、错误提示、备份恢复；状态见07
+  researched_facts:
+  - 现有会话所有权、任务/小组事务锁、版本校验和私有文件契约见02/03
+  - v2及工作已上线，当前验证/修复证据见07-TASKS
+  default_assumptions:
+  - assumption: 最终收口轮提出的每次5个附件、打回原因必填、移出成果保留、空名单不完成等规则沿用
+    provenance: user_locked
+    confidence: high
+    verification_plan: 按PRD第10节验收；最终修改仅涉及游客列表
+    consequence_if_wrong: 需调整附件限制和完成验收规则
+  - assumption: 具体文件扩展名和10MB字节口径按PRD第5及第11节
+    provenance: model_default
+    confidence: medium
+    verification_plan: 实现前核验允许类型与服务端校验，边界大小及伪造类型测试
+    consequence_if_wrong: 个别格式可能无法上传，需修订允许类型或用链接
+  - assumption: 发布后类型和交付模式固定，要求修改不自动撤回通过结果，完成任务不直接改为撤销
+    provenance: model_default
+    confidence: medium
+    verification_plan: 状态与页面契约评审核验，变化时先更新验收及历史映射规则
+    consequence_if_wrong: 需增加模式转换或撤回验收规则，不可悄悄重解释历史成果
+  - assumption: 弹窗逐项已读、失效指派过滤及原截止时间沿用按PRD补充规则
+    provenance: model_default
+    confidence: high
+    verification_plan: 提醒及重新开启的真实浏览器验收
+    consequence_if_wrong: 会出现重复提醒或新轮截止时间误解
+  - assumption: 个人记录默认进行中，标题说明必填且沿用120字与20000字的现有文字边界
+    provenance: artifact_inferred
+    confidence: medium
+    verification_plan: 页面与服务端统一输入校验和长度边界测试
+    consequence_if_wrong: 需调整个人记录字段提示及校验边界，不影响所有权规则
+  - assumption: 完成时间由状态切换确定，完成状态内修改文字不重置；恢复进行中或暂停后再次完成使用新完成时间
+    provenance: model_default
+    confidence: high
+    verification_plan: V2-W05及V2-W06覆盖状态往返跨周临界点和旧记录改字
+    consequence_if_wrong: 需另行确认完成历史语义，否则旧记录可能误入近期
+  - assumption: 成员任务摘要采用当前轮次与有效名单，完成轮次名单固定，旧轮历史仍通过任务详情访问
+    provenance: artifact_inferred
+    confidence: medium
+    verification_plan: V2-W07覆盖移出入组完成和重开，回归原任务规则
+    consequence_if_wrong: 若需逐轮参与历史，应补充成员页面历史范围，不能自动扩展
+  - assumption: 个人记录按更新时间倒序并分页，本人完整管理与他人近期读取分别授权
+    provenance: model_default
+    confidence: medium
+    verification_plan: V2-W03及V2-W09核验分页不遗漏重复和旧记录读权限
+    consequence_if_wrong: 需调整排序或分页，不改变完成时间和访问范围
+  - assumption: 沿用现有维护者技术栈发布和回退要求，不承诺本轮开发或部署日期
+    provenance: artifact_inferred
+    confidence: high
+    verification_plan: 开发交接及发布前核对容量性能备份恢复与状态记录
+    consequence_if_wrong: 需重新确认维护者及发布责任，不可据文档视为已上线
+  open_questions: []
+  deferred_questions: []
+  immaterial_questions:
+  - 不另询问现有技术栈及小组管理规则，已从文档代码核验
+  - 不在业务需求阶段固定页面路由和物理文件存放路径，相关契约已明确负责人及核定触发点
+  lane_status:
+    problem_layer: answered
+    users_stakeholders_owners: assumed
+    scope: answered
+    non_goals: answered
+    success_criteria: answered
+    constraints: deferred
+    dependencies_prerequisites: researched
+    interfaces_data_integrations: researched
+    security_policy_compliance: answered
+    tradeoffs_priorities: answered
+    edge_cases_failure_modes: assumed
+    rollout_migration_compatibility: researched
+    verification_observability_acceptance: answered
+    maintenance_support: assumed
+  plan_allowed: true
+message_cleanup_v22_20261009:
+  status: 2026-10-09已上线
+  confirmation: 用户确认1B仅已加载、1A无恢复，最终A定稿
+  prd: docs/10-PRD-v2.2.md
+  implementation:
+    authorization: 用户要求完成v2.2开发
+    api: DELETE /api/notifications，固定ID集合和confirm真值，一次1至10000条
+    guarantees: 会话归属及已读校验，混合非法批次整体拒绝，缺失ID幂等，不影响业务历史
+    migration: 无新增表列或迁移，无新增依赖
+    validation: lint、非增量类型检查、Windows生产构建、68单元、74集成、32组浏览器检查通过
+    evidence: docs/07-TASKS.md的v2.2本地验收与正式发布节
+    production: 2026-10-09已上线，正式桌面/手机验收及成套备份恢复通过；V3未开发
+  grill_decision_packet:
+    goal: 清理本人已读消息，减少站内消息列表负担
+    problem_layer: 通知历史整理及明确删除范围
+    target_user_or_maintainer: 注册成员和项目维护者
+    stakeholders_and_owners:
+    - 成员决定删除自己的已读消息
+    - 开发者负责实现及验证；维护者负责备份发布和回退
+    scope:
+    - 原消息页多选删除及一键删除已加载的已读消息
+    - 删除前确认条数，取消无变化，删除后无产品恢复入口
+    non_goals:
+    - 未读删除、他人消息删除、全库历史清空、回收站、自动到期
+    - 关系图和Jev推荐，另属V3
+    locked_decisions:
+      version: v2.2
+      delete_scope: 本人当前已加载的已读消息，含追加加载，不含未加载历史
+      modes: 多选删除与一键删除已加载已读
+      retention: 确认后删除，无回收站或恢复入口
+      business_isolation: 删除通知不删除任务成果反馈轮次附件或任务历史
+    tradeoffs_accepted:
+    - 只能清理已加载范围，清理更早消息需先加载
+    - 无恢复入口，换取简单的整理流程
+    primary_invariant: 会话决定接收人，删除仅作用于本人已读通知，不影响未读提醒或业务事实
+    success_criteria:
+    - 多选和一键范围正确、未读及未加载消息保留
+    - 授权、并发重复、分页与桌面手机交互可验证
+    proof_bar: 10-PRD-v2.2.md的V22-N01～09；本地68单元/74集成/32浏览器通过，正式结果见07
+    compatibility_posture: 保留现有消息读取已读分页指派弹窗及全部课程任务权限
+    rollout_rollback_posture: 已授权开发部署；先备份及回退保护，应用回退不恢复用户明确删除的消息
+    support_and_maintenance_posture: 沿用现有维护者、目录、错误提示、备份恢复；状态见07
+    researched_facts:
+    - 原读取每批200条、ID游标；新增DELETE固定集合1～10000条，契约见03
+    - 本地验证及生产状态见07，不复用旧版本上线证据
+    default_assumptions:
+    - assumption: 一键清理仍需确认并固定目标集合，不包含确认期间到达或新加载消息
+      provenance: model_default
+      confidence: high
+      verification_plan: V22-N01、N02、N06验证确认条数和并发新增
+      consequence_if_wrong: 可能误删用户未预期的消息，必须修订确认契约
+    - assumption: 已删除目标重复请求可收敛；混入他人或未读消息的批次整体拒绝
+      provenance: model_default
+      confidence: medium
+      verification_plan: V22-N04至N06验证服务端授权及不发生部分删除
+      consequence_if_wrong: 错误或重试语义需调整，不能放宽本人已读边界
+    - assumption: 继续沿用中文主题、居中确认和390px移动适配
+      provenance: artifact_inferred
+      confidence: high
+      verification_plan: V22-N08桌面手机和键盘验证
+      consequence_if_wrong: 调整交互细节，不改变删除范围
+    open_questions: []
+    deferred_questions:
+    - id: v22_release_date
+      question: 开发和上线日期
+      owner: 项目维护者
+      default_action: 不承诺日期；用户后续授权开发，验证备份后单独记录发布
+      consequence_if_wrong: 交付时间可能不同，不能把需求确认当成已上线
+      due_or_trigger: 开发和发布交接
+    immaterial_questions:
+    - 本轮不选择新增管理员、站外通知或改变已有课表算法
+    lane_status:
+      problem_layer: answered
+      users_stakeholders_owners: researched
+      scope: answered
+      non_goals: answered
+      success_criteria: answered
+      constraints: researched
+      dependencies_prerequisites: researched
+      interfaces_data_integrations: researched
+      security_policy_compliance: researched
+      tradeoffs_priorities: answered
+      edge_cases_failure_modes: assumed
+      rollout_migration_compatibility: assumed
+      verification_observability_acceptance: answered
+      maintenance_support: assumed
+    plan_allowed: true
+graph_recommendation_v3_20261009:
+  status: 需求确认交接，未开发未部署
+  confirmation: 用户逐轮确认后选择全端2D、3D后续，并最终A定稿
+  prd: docs/11-PRD-v3.md
+  grill_decision_packet:
+    goal: 用可追溯工作关系图理解成员积累，辅助指定任务发布者比较个人与小组候选
+    problem_layer: 成员工作信息的关联阅读和人工任务分配决策支持
+    target_user_or_maintainer: 注册成员、任务发布者、开发者和项目维护者
+    stakeholders_and_owners:
+    - 注册成员维护自己的记录，所有注册成员共享授权历史图谱
+    - 发布者决定自己任务的执行对象，组长保留原小组管理职责
+    - 用户在V3开发前确定生成式模型平台及费用；维护者负责安全配置和运维
+    - 开发者与用户共同核验模型评分和实际使用效果
+    scope:
+    - 独立关系图页，个人小组全体切换，电脑手机均2D且默认全量节点
+    - 全部现存历史记录及相关任务，真实关系和AI主题关联区分，来源可查
+    - 小组汇总当前成员，任务和记录同图，不另划个人经历与小组成果区域
+    - 数据变化自动更新AI，删除记录后清除节点引用及推荐依据
+    - 点击Jev推荐个人和小组，综合经历与当前负担，发布者手动选择
+    non_goals:
+    - 本期3D、自动发布指派验收、管理员、游客访问、能力考核、附件正文及课程分析
+    - 修改原成员页近期窗口或扩展跨成员写权限
+    locked_decisions:
+      version: V3
+      graph_dimension: 全部设备2D；3D仅后续计划
+      graph_entry: 独立页面，个人小组全体范围切换
+      graph_default_detail: 展示所选范围全部节点，不默认仅主题或折叠概览
+      graph_relations: 真实参与关系与AI主题关联并存且明确区分
+      graph_visibility: 所有注册可用成员，游客及未登录拒绝
+      graph_history: 全部现存历史，在图谱及其来源开放，原成员页仍近期
+      group_rollup: 当前组员全部历史汇总，不另设个人与小组成果分类区域，原所有者保持
+      graph_refresh: 相关数据变化后自动更新，包括AI主题关联
+      deleted_source: 不再显示或用作分析推荐依据，旧请求不得恢复引用
+      external_data: 必要任务记录文字，成员代号，不发送学号账号资料或附件正文
+      graph_provider: 用户V3开发前确定生成式模型平台、费用和凭据
+      recommendation_provider: TypeSafe Jev；用户已有Key，尚未配置或真实验证
+      candidate_scope: 默认全部注册启用成员，可限定小组；推荐个人和小组
+      recommendation_priority: 综合相关经历与当前任务负担
+      recommendation_entry: 发布指定任务及发布者调整进行中任务执行对象
+      recommendation_trigger: 发布者点击推荐候选人
+      recommendation_result: 排序和相关经历负担依据，信息不足明示但仍可手动选择
+      assignment_authority: 发布者手选一人多人小组，不自动指派，实际提交再授权去重
+      cost_policy: 不设费用上限，按实际调用付费，仍应控制无限重试并观察用量
+    tradeoffs_accepted:
+    - 扩大图谱历史读取，成员原写权限和成员页近期展示保持
+    - 全量节点和自动AI更新接受阅读性能调优及调用成本
+    - 当前组员历史汇总不能等同于本组在当时完成的成果
+    - 接受模型判断可能有误，最终仍由发布者决定，不承诺未经验证准确率
+    primary_invariant: 真实业务记录和服务端权限是事实来源；AI只做可追溯关联与建议，删除来源失效，不产生自动指派或扩大写权限
+    success_criteria:
+    - 2D图按范围正确展示全量历史，区分真实和推断，桌面手机可查来源
+    - 自动更新和删除失效可验证，游客拒绝且原近期与本人写权限保持
+    - 点击推荐个人及小组，范围负担依据可信，发布者手选且重新校验当前资格
+    - 模型失败不阻断基础图或手动指派，必要文本代号与凭据安全可验证
+    proof_bar: 11-PRD-v3.md的V3-G01至G06、R01至R04、A01至A05；模型质量样本和性能门槛在开发准备时核定，未核定或未验证不作为上线通过
+    compatibility_posture: V3专用读取扩展显式补契约，不改成员页近期窗口、课程算法、任务轮次、小组管理和写权限
+    rollout_rollback_posture: 本轮仅文档；平台及数据契约确定后再开发，验证备份后单独发布；可停止AI，回退保留源数据并收回V3历史入口
+    support_and_maintenance_posture: 沿用现有维护者、目录、错误提示、备份恢复；状态见07
+    researched_facts:
+    - 工作记录当前没有小组归属字段，其他成员的all历史请求被原服务拒绝
+    - 现有任务支持个人多组混选、启用注册排除、动态名单和历史固定轮次
+    - 现有Qwen配置只用于课表视觉识别，不能证明已配置图谱文字模型
+    - Jev官方文档支持Choice、Score、Noul结构化结果，不生成自由文本
+    - 官方参考为https://docs.typesafe.ai/introduction和https://api.typesafe.ai/docs
+    - 本轮未调用付费模型或验证Key，不声称性能或推荐准确率
+    default_assumptions:
+    - assumption: 所有图谱来源保留类型所有者和状态以可核实，但不另分个人经历与小组成果区域
+      provenance: artifact_inferred
+      confidence: high
+      verification_plan: V3-G01、G03检查真实来源归属和当前小组历史汇总
+      consequence_if_wrong: 展示结构需调整，不能误标业务事实
+    - assumption: 自动更新可合并变化缓存重试，但旧版本和已删除来源不能重新发布
+      provenance: model_default
+      confidence: high
+      verification_plan: V3-G05、G06与R04验证途中删除和新旧版本竞争
+      consequence_if_wrong: 陈旧或已删除内容可能暴露，必须阻止上线
+    - assumption: 业务数据保留在原系统，外部请求不入事务，不在当前小服务器本地加载大模型
+      provenance: artifact_inferred
+      confidence: high
+      verification_plan: 实现前审核数据流，V3-A02与A05验证失败隔离和资源边界
+      consequence_if_wrong: 需重新评估部署资源及业务可用性，不静默扩大费用或服务
+    - assumption: 分析不编造能力，无依据者明确缺失信息，推荐理由来自可核实事实摘要
+      provenance: model_default
+      confidence: high
+      verification_plan: V3-R02、A04人工核对经历负担及信息不足案例
+      consequence_if_wrong: 建议可能误导成员选择，需要调整评分和展示
+    open_questions: []
+    deferred_questions:
+    - id: graph_generation_provider
+      question: 生成式模型平台、模型、凭据、费用和提供方数据处理条件
+      owner: 用户和项目维护者
+      default_action: 未确认只研究或隔离原型，不擅选平台、不发送正式数据或宣称AI可发布
+      consequence_if_wrong: 模型能力费用或数据处理可能不符合预期，需要重核集成
+      due_or_trigger: V3开发及首次真实外部分析前
+    - id: jev_live_integration
+      question: Jev当前账号可用模型、接口和真实Key配置
+      owner: 项目维护者
+      default_action: 服务端安全配置后最小真实验证，失败保留手动选择
+      consequence_if_wrong: 推荐接口不可用，不能用模拟冒充真实接通
+      due_or_trigger: 首次真实Jev调用前
+    - id: graph_quality_and_performance_bar
+      question: 图谱规模响应目标、评分权重置信度及人工评价样本和门槛
+      owner: 开发者和用户
+      default_action: 开发准备时按真实规模和典型任务确定并记录，未核定仅隔离原型
+      consequence_if_wrong: 可能不可读或推荐无效，不能认定达到发布条件
+      due_or_trigger: V3开发准备及模型质量验收前
+    - id: v3_data_and_integration_contract
+      question: V3历史授权接口、持久化、自动更新及缓存失效契约
+      owner: 开发者
+      default_action: 实现前补原02、03、05及AGENTS，明确新读取例外不改变本人写权限
+      consequence_if_wrong: 可能越权或删除引用复活，禁止发布
+      due_or_trigger: V3实现前
+    - id: v3_release_date
+      question: 开发和上线时间
+      owner: 项目维护者
+      default_action: 不承诺日期，平台契约及验证备份完成后单独发布
+      consequence_if_wrong: 排期不同但不能把需求当已实现上线
+      due_or_trigger: 开发发布交接
+    - id: graph_3d_future
+      question: 后续3D模式、手机默认、二维切换和性能兼容
+      owner: 用户和开发者
+      default_action: 本期全端2D，不安装或交付3D能力，后续另确认
+      consequence_if_wrong: 若提前做3D将扩大开发及验收范围
+      due_or_trigger: 用户启动3D后续需求时
+    immaterial_questions:
+    - 本轮不固定绘图库版本、配色、布局参数或具体按钮样式
+    - 本轮不重新讨论已有管理员、课程算法和附件配额等既有边界
+    lane_status:
+      problem_layer: answered
+      users_stakeholders_owners: answered
+      scope: answered
+      non_goals: answered
+      success_criteria: answered
+      constraints: answered
+      dependencies_prerequisites: deferred
+      interfaces_data_integrations: deferred
+      security_policy_compliance: answered
+      tradeoffs_priorities: answered
+      edge_cases_failure_modes: assumed
+      rollout_migration_compatibility: assumed
+      verification_observability_acceptance: deferred
+      maintenance_support: assumed
+    plan_allowed: true
+task_ui_increment_20261009:
+  grill_decision_packet:
+    goal: 改善HenuBCI任务列表分类、任务资料阅读及任务要求编辑体验
+    problem_layer: 现有任务界面的分类和阅读交互
+    target_user_or_maintainer: 注册成员、只读游客及项目开发维护者
+    stakeholders_and_owners:
+    - 用户确认业务需求及最终范围，发布者和执行成员保持原有职责
+    - 开发者负责契约、安全实现及本地业务验收
+    - 项目维护者负责后续备份、发布、正式验证和回退
+    scope:
+    - 默认进行中的公开任务在上、指定任务在下，同一页面上下分区
+    - 状态下拉仅进行中、已完成、已撤销；历史状态各自合并类型并标注
+    - 原搜索和个人范围筛选保留，指定任务默认所有注册成员可见，游客也分区
+    - 小组选项仅显示名称，实际执行人数与有效名单规则保持
+    - 任务资料PDF、图片、TXT、Markdown站内预览并保留下载，Office或失败提示下载
+    - 发布及修改任务要求支持Markdown格式按钮与编辑/预览切换，详情格式展示
+    non_goals:
+    - 不改变角色、所有权、状态完成规则、任务删除权限或历史轮次
+    - 不修改成员工作及近期任务摘要规则
+    - 不增加Office预览、第三方文档处理、成果预览或成果Markdown
+    - 本轮不实现代码、数据库迁移或生产部署
+    locked_decisions:
+    - 公开对应announcement，指定对应assigned，不新增任务类型
+    - 进行中只含active，已完成只含completed，已撤销只含cancelled，无全部状态入口
+    - 默认两个类型上下分区，历史合并展示类型标签，重开回到对应进行中分区
+    - 搜索和范围筛选作用于当前状态，游客只读基本信息且不进入详情或附件
+    - 小组选项不显示每组人数，保留去重、动态同步、整体汇总及排除提示
+    - 附件预览仅任务资料含历史关联版本，成果附件保留下载
+    - Markdown仅任务要求，普通文字及旧内容保持可读，成果说明保持现状
+    - 用户最终A确认完整范围，需求收口并记录到现有文件
+    - 任务要求编辑器仅编辑/预览，格式手动输入，不提供快捷格式按钮
+    tradeoffs_accepted:
+    - Office文件需要下载，无法展示的文件提供明确提示及下载回退
+    - Markdown采用编辑/预览切换，不要求电脑分屏实时编辑
+    - 标签简化不减少真实执行名单验证或必要排除提示
+    primary_invariant: 列表和预览交互不得改变任务权限、整体完成语义、历史记录或私有附件访问边界
+    success_criteria:
+    - PRD第21节V2-U01至V2-U10通过，且原有受影响业务保持
+    - 默认不混入完成和撤销任务，历史入口结果正确且重开后正确归类
+    - 已关联资料授权预览可用、无越权或脚本执行，Markdown编辑保存展示一致
+    proof_bar: 09-PRD-v2.md的V2-U01～10；正式结果见07-TASKS
+    compatibility_posture:
+    - 保留数据、任务类型状态枚举、原长度额度限制和普通文字可读性
+    - 实现前补齐游客分类和私有预览API契约，禁止扩散内部字段
+    - 回归任务轮次、验收、动态名单、原下载及成员近期摘要
+    rollout_rollback_posture: 已上线，镜像和成套备份见07；回退保留业务数据和卷
+    support_and_maintenance_posture: 沿用现有维护者、目录、错误提示、备份恢复；状态见07
+    researched_facts:
+    - 公开/指定分区、安全Markdown和鉴权资料预览已上线
+    - 编辑器仅保留编辑/预览；PDF本地绘制及字体/CMap/WASM通过正式检查
+    default_assumptions:
+    - assumption: 本轮Markdown常用格式包括标题、列表、表格、引用、链接和代码，禁执行原始HTML及危险协议
+      provenance: model_default
+      confidence: high
+      verification_plan: 实现编辑预览与详情一致性及恶意输入测试
+      consequence_if_wrong: 需调整渲染格式范围，但不能放宽脚本和权限边界
+    - assumption: 旧要求文字保持可读，不改写存量内容或旧版本
+      provenance: artifact_inferred
+      confidence: high
+      verification_plan: 用含换行及特殊符号的旧任务检查详情与编辑回显
+      consequence_if_wrong: Markdown可能误解旧文字，应保留旧内容展示语义
+    - assumption: 空分区独立提示，不使用固定大高度；预览采用现有主题与居中窗口规范
+      provenance: model_default
+      confidence: high
+      verification_plan: 桌面及390px检查空列表和长预览的布局与关闭
+      consequence_if_wrong: 需要调整具体样式，不改变列表业务规则
+    open_questions: []
+    deferred_questions: []
+    immaterial_questions:
+    - 不重新确认已存在的角色、课程权限、成员近期范围、配额或业务状态
+    - 不在本轮固定颜色、图标、按钮排列及底层依赖版本
+    lane_status:
+      problem_layer: answered
+      users_stakeholders_owners: researched
+      scope: answered
+      non_goals: answered
+      success_criteria: answered
+      constraints: researched
+      dependencies_prerequisites: deferred
+      interfaces_data_integrations: researched
+      security_policy_compliance: researched
+      tradeoffs_priorities: answered
+      edge_cases_failure_modes: assumed
+      rollout_migration_compatibility: assumed
+      verification_observability_acceptance: answered
+      maintenance_support: assumed
+    plan_allowed: true
+document_policy: 保存最终决策及默认出处；PRD管规则，07管进度和证据，不重复历史开发流水。

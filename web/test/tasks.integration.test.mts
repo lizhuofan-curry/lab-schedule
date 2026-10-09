@@ -22,6 +22,7 @@ const {
   taskDetail,
   notifications,
   readNotifications,
+  deleteNotifications,
   TaskError,
   taskOptions,
   unboundFiles,
@@ -731,6 +732,108 @@ test("超过200条消息仍能翻页看历史，未读数计算全部且不能�
     }),
   );
   assert.equal(empty.status, 422);
+});
+
+test("已读清理仅删除目标通知，任务成果附件历史和新未读指派保持", async () => {
+  const file = await uploadTaskFile(new File(["reference"], "notice-reference.txt"), a);
+  const task = await createTask(input({ fileIds: [file.id] }), a);
+  await submit(task.id, b);
+  const d = await detail(task.id);
+  const [read] = await db.insert(schema.taskNotifications).values({
+    recipientId: b.studentId, taskId: task.id, roundId: d.rounds[0].id,
+    title: "待清理消息", message: "不得复制到审计的私有正文", readAt: new Date(),
+  }).returning();
+  const before = await sqlClient`select (select count(*) from collab_tasks)::int tasks,
+    (select count(*) from task_rounds)::int rounds, (select count(*) from task_participants)::int participants,
+    (select count(*) from task_submissions)::int submissions, (select count(*) from task_events)::int events,
+    (select count(*) from task_files)::int files, (select count(*) from courses)::int courses`;
+  const unread = (await notifications(b)).unread;
+  assert.deepEqual(await deleteNotifications([read.id], b), { deleted: 1 });
+  assert.deepEqual(await deleteNotifications([read.id], b), { deleted: 0 });
+  const inbox = await notifications(b);
+  assert.equal(inbox.unread, unread);
+  assert.ok(inbox.assignments.some((n) => n.taskId === task.id));
+  const afterCounts = await sqlClient`select (select count(*) from collab_tasks)::int tasks,
+    (select count(*) from task_rounds)::int rounds, (select count(*) from task_participants)::int participants,
+    (select count(*) from task_submissions)::int submissions, (select count(*) from task_events)::int events,
+    (select count(*) from task_files)::int files, (select count(*) from courses)::int courses`;
+  assert.deepEqual(afterCounts, before);
+  assert.equal(await (await downloadTaskFile(file.id, b)).text(), "reference");
+  const [audit] = await sqlClient`select after_json as "after" from audit_logs where action='notification.delete' order by id desc limit 1`;
+  assert.deepEqual(JSON.parse(audit.after), { requested: 1, deleted: 1 });
+});
+
+test("清理混入他人或未读目标整体拒绝，不产生合法部分删除", async () => {
+  const task = await createTask(input(), a);
+  const d = await detail(task.id);
+  const make = (recipientId: number, readAt: Date | null) => ({ recipientId, taskId: task.id, roundId: d.rounds[0].id, title: "清理权限", message: "保留", readAt });
+  const rows = await db.insert(schema.taskNotifications).values([
+    make(b.studentId, new Date()), make(c.studentId, new Date()), make(b.studentId, null),
+  ]).returning();
+  await assert.rejects(deleteNotifications([rows[0].id, rows[1].id], b), errorCode("FORBIDDEN_NOTIFICATION"));
+  await assert.rejects(deleteNotifications([rows[0].id, rows[2].id], b), errorCode("NOTIFICATION_UNREAD"));
+  const remaining = await sqlClient`select id from task_notifications where id in ${sqlClient(rows.map((row) => row.id))}`;
+  assert.equal(remaining.length, 3);
+});
+
+test("删除当前页及游标行后更早未加载消息仍可继续翻页", async () => {
+  const task = await createTask(input(), a);
+  const d = await detail(task.id);
+  const rows = await db.insert(schema.taskNotifications).values(Array.from({ length: 405 }, (_, i) => ({
+    recipientId: c.studentId, taskId: task.id, roundId: d.rounds[0].id,
+    title: "清理分页", message: String(i), readAt: new Date(),
+  }))).returning();
+  const first = await notifications(c);
+  assert.ok(first.nextCursor);
+  const ids = first.messages.map((m) => m.id);
+  assert.equal((await deleteNotifications(ids, c)).deleted, 200);
+  const next = await notifications(c, first.nextCursor!);
+  assert.equal(next.messages.length, 200);
+  assert.ok(next.messages.every((m) => !ids.includes(m.id)));
+  const last = await notifications(c, next.nextCursor!);
+  assert.ok(last.messages.some((m) => m.id === rows[0].id));
+  assert.ok(next.messages.some((m) => m.id === rows[204].id));
+});
+
+test("并发和反序重复清理同一集合收敛，不重复删除其他消息", async () => {
+  const task = await createTask(input(), a);
+  const d = await detail(task.id);
+  const rows = await db.insert(schema.taskNotifications).values(Array.from({ length: 3 }, () => ({
+    recipientId: b.studentId, taskId: task.id, roundId: d.rounds[0].id, title: "并发清理", message: "内容", readAt: new Date(),
+  }))).returning();
+  const ids = rows.map((row) => row.id);
+  const results = await Promise.all([
+    deleteNotifications(ids.slice(0, 2), b), deleteNotifications(ids.slice(0, 2).reverse(), b),
+  ]);
+  assert.equal(results.reduce((sum, r) => sum + r.deleted, 0), 2);
+  assert.equal((await sqlClient`select id from task_notifications where id=${ids[2]}`).length, 1);
+});
+
+test("消息删除路由严格校验身份Origin确认和批次，重复删除成功且禁缓存", async () => {
+  const task = await createTask(input(), a);
+  const d = await detail(task.id);
+  const [row] = await db.insert(schema.taskNotifications).values({
+    recipientId: b.studentId, taskId: task.id, roundId: d.rounds[0].id, title: "路由清理", message: "内容", readAt: new Date(),
+  }).returning();
+  const body = { ids: [row.id], confirm: true };
+  const req = (cookie?: string, data: unknown = body, requestOrigin = origin) => new Request(`${origin}/api/notifications`, {
+    method: "DELETE", headers: { ...(cookie ? { cookie } : {}), origin: requestOrigin, "content-type": "application/json" }, body: JSON.stringify(data),
+  });
+  assert.equal((await notificationRoute.DELETE(req())).status, 401);
+  const guest = await (await import("@/app/api/guest-session/route")).POST();
+  assert.equal((await notificationRoute.DELETE(req(guest.headers.get("set-cookie")!.split(";", 1)[0]))).status, 403);
+  assert.equal((await notificationRoute.DELETE(req(cookies[b.studentNo], body, "https://evil.invalid"))).status, 403);
+  assert.equal((await notificationRoute.DELETE(req(cookies[a.studentNo]))).status, 403);
+  for (const data of [{ ids: [row.id] }, { ...body, recipientId: b.studentId }, { ids: [], confirm: true }, { ids: [row.id, row.id], confirm: true }])
+    assert.equal((await notificationRoute.DELETE(req(cookies[b.studentNo], data))).status, 422);
+  const response = await notificationRoute.DELETE(req(cookies[b.studentNo]));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual((await response.json()).data, { deleted: 1 });
+  assert.deepEqual((await (await notificationRoute.DELETE(req(cookies[b.studentNo]))).json()).data, { deleted: 0 });
+  await db.update(schema.students).set({ enabled: false }).where(eq(schema.students.id, c.studentId));
+  try { await assert.rejects(deleteNotifications([row.id], c), errorCode("UNAUTHORIZED")); }
+  finally { await db.update(schema.students).set({ enabled: true }).where(eq(schema.students.id, c.studentId)); }
 });
 
 test("成员移出再加入只显示新指派，不复活旧提醒", async () => {

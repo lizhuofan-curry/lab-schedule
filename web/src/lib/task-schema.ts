@@ -97,6 +97,14 @@ export const taskCommandSchema = z.discriminatedUnion("action", [
 export const notificationReadSchema = z
   .object({ ids: z.array(id).min(1).max(200) })
   .strict();
+export const notificationDeleteSchema = z
+  .object({
+    ids: z.array(id).min(1, "请选择已读消息。")
+      .max(10000, "一次最多清理10000条消息，请减少选择后重试。")
+      .refine((values) => new Set(values).size === values.length, "请勿重复选择消息。"),
+    confirm: z.literal(true),
+  })
+  .strict();
 export const taskFileUploadSchema = z
   .object({
     file: z
