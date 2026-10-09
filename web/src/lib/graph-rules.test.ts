@@ -12,6 +12,18 @@ const fixture = (): GraphSnapshot => ({
   rounds: [1, 2].map((n) => ({ id: n, taskId: 1, number: n, title: "同一任务", description: "实验要求", directIds: [2], groupIds: [1, 2], deadline: null, endedAt: n === 1 ? "2020-01-01" : null, outcome: n === 1 ? "completed" : null })),
   participants: [{ roundId: 1, studentId: 3, active: true, generation: 1 }],
 });
+test("连线中间的无关节点自然错开，拖动固定的端点保持原位", () => {
+  const graph = buildGraph(fixture(), { scope: "all" });
+  const nodes = graph.nodes.slice(0, 3), [a, b, c] = nodes;
+  const initial = new Map([[a.id, { x: -100, y: 0 }], [b.id, { x: 100, y: 0 }], [c.id, { x: 0, y: 0 }]]);
+  const simulation = createGraphSimulation(nodes, [{ ...graph.edges[0], from: a.id, to: b.id }], initial);
+  simulation.pin(a.id, -100, 0); simulation.pin(b.id, 100, 0);
+  for (let i = 0; i < 160; i++) simulation.tick();
+  const positions = simulation.positions();
+  assert.ok(Math.abs(positions.get(c.id)!.y) > 10);
+  assert.deepEqual(positions.get(a.id), initial.get(a.id));
+  assert.deepEqual(positions.get(b.id), initial.get(b.id));
+});
 test("范围严格校验，不接受伪造身份、重复字段或all附带id", () => {
   for (const value of [{ scope: "all", id: 1 }, { scope: "member" }, { scope: "group", id: 0 }, { scope: "member", id: "1.1" }, { scope: "all", studentId: 2 }]) assert.equal(graphQuerySchema.safeParse(value).success, false);
   assert.equal(graphQuerySchema.safeParse({ scope: "member", id: "2" }).success, true);

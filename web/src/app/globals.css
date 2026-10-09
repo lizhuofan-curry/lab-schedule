@@ -26,16 +26,16 @@
 .graph-canvas-wrap { position: relative; min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; overflow-anchor: none; background: var(--panel); }
 .graph-canvas { display: block; width: 100%; height: min(65vh, 650px); min-height: 340px; touch-action: none; cursor: grab; }
 .graph-canvas:active { cursor: grabbing; }
-.graph-edge { stroke: var(--line-dark); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.graph-edge { stroke: var(--line-dark); stroke-width: .6; vector-effect: non-scaling-stroke; }
 .graph-edge.inferred { stroke: var(--rust); stroke-dasharray: 6 5; }
-.graph-edge.highlighted { stroke: var(--forest-2); stroke-width: 1; }
+.graph-edge.highlighted { stroke: var(--forest-2); stroke-width: .6; }
 .graph-node { cursor: grab; }
-.graph-node circle { stroke: var(--panel); stroke-width: 1; vector-effect: non-scaling-stroke; fill: var(--forest-2); }
+.graph-node circle { stroke: none; fill: var(--forest-2); }
 .graph-node.group circle, .graph-legend i.group { fill: var(--rust); background: var(--rust); }
 .graph-node.work circle, .graph-legend i.work { fill: var(--course-4-accent); background: var(--course-4-accent); }
 .graph-node.task circle, .graph-legend i.task { fill: var(--course-3-accent); background: var(--course-3-accent); }
 .graph-node.theme circle, .graph-legend i.theme { fill: var(--course-5-accent); background: var(--course-5-accent); }
-.graph-node text { fill: var(--ink-soft); font-size: 14px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.graph-node text { fill: var(--ink-soft); font-size: 14px; stroke: none; pointer-events: none; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-soft); }
 .graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .graph-legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--forest-2); }

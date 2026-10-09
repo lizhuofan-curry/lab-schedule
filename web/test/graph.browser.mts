@@ -142,7 +142,12 @@ try {
     await writeFile(`${output}/hover-${width}.json`, JSON.stringify(await page.evaluate(({ x, y }) => ({ x, y, scroll: scrollY, hit: document.elementFromPoint(x, y)?.outerHTML.slice(0, 600), nodes: document.querySelectorAll('.graph-node').length, edges: document.querySelectorAll('.graph-edge').length, highlights: document.querySelectorAll('.graph-edge.highlighted').length }), { x: nodeBox!.x + nodeBox!.width / 2, y: nodeBox!.y + nodeBox!.height / 2 }), null, 2));
     await page.screenshot({ path: `${output}/hover-${width}.png`, fullPage: true, animations: "disabled" });
     await expect(page.locator(".graph-edge.highlighted").first()).toBeVisible();
-    expect(await page.locator(".graph-edge.highlighted").first().evaluate(element => getComputedStyle(element).strokeWidth)).toBe("1px");
+    expect(await page.locator(".graph-edge.highlighted").first().evaluate(element => getComputedStyle(element).strokeWidth)).toBe("0.6px");
+    expect(await page.locator(".graph-node circle").first().evaluate(element => getComputedStyle(element).stroke)).toBe("none");
+    expect(await page.locator(".graph-node text").first().evaluate(element => {
+      const edge = document.querySelector(".graph-edge:last-of-type")!;
+      return { stroke: getComputedStyle(element).stroke, aboveEdges: Boolean(edge.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) };
+    })).toEqual({ stroke: "none", aboveEdges: true });
     await page.mouse.down(); await page.mouse.move(nodeBox!.x + 60, nodeBox!.y + 50, { steps: 6 });
     await expect(nodeGroup).not.toHaveAttribute("transform", initialPosition!);
     await expect(neighbor).not.toHaveAttribute("transform", oldNeighbor!);

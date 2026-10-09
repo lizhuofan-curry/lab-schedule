@@ -32,6 +32,27 @@ function repel(p: Point, cell: Cell, alpha: number) {
   } else for (const child of cell.children!) repel(p, child, alpha);
 }
 
+// Keep unrelated nodes clear of a link's interior without adding graph edges.
+// Query the same spatial tree so this does not scan every node for every link.
+function clearLink(a: Point, b: Point, cell: Cell, alpha: number) {
+  const gap = 16;
+  if (!cell.mass || cell.left > Math.max(a.x, b.x) + gap || cell.left + cell.width < Math.min(a.x, b.x) - gap || cell.top > Math.max(a.y, b.y) + gap || cell.top + cell.width < Math.min(a.y, b.y) - gap) return;
+  if (cell.children) { for (const child of cell.children) clearLink(a, b, child, alpha); return; }
+  const dx = b.x - a.x, dy = b.y - a.y, squared = dx * dx + dy * dy;
+  if (squared < 1) return;
+  const length = Math.sqrt(squared);
+  for (const p of cell.points ?? []) {
+    if (p === a || p === b || p.fixed) continue;
+    const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / squared;
+    if (t <= .08 || t >= .92) continue;
+    const signed = ((p.x - a.x) * -dy + (p.y - a.y) * dx) / length;
+    if (Math.abs(signed) >= gap) continue;
+    const side = signed === 0 ? (p.id.localeCompare(a.id) < 0 ? -1 : 1) : Math.sign(signed);
+    const push = side * (gap - Math.abs(signed)) * .35 * alpha;
+    p.vx += -dy / length * push; p.vy += dx / length * push;
+  }
+}
+
 // Deterministic force layout: links attract, nearby nodes repel. The tree bounds
 // repulsion work for large graphs; every node remains in the layout.
 export function seedGraphPositions(nodes: GraphNode[]) {
@@ -67,6 +88,7 @@ export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [
       a.vx += dx * force * (1 - bias); a.vy += dy * force * (1 - bias);
       b.vx -= dx * force * bias; b.vy -= dy * force * bias;
     }
+    for (const { a, b } of links) clearLink(a, b, root, alpha);
     for (const p of points) {
       if (p.fixed) { p.x = p.fixed.x; p.y = p.fixed.y; p.vx = 0; p.vy = 0; continue; }
       // A soft circular envelope keeps sparse leaf branches within the cloud;
