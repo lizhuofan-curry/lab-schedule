@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { SearchableSelect } from "./searchable-select";
 
-type Choice = { value: string; label: string };
+type Choice = { value: string; label: string; group?: string };
 
 export function ConfirmationDialog({ title, description, confirmLabel, onConfirm, onClose, busy = false, error = "" }: {
   title: string; description: string; confirmLabel: string;
@@ -35,7 +36,15 @@ export function ConfirmationDialog({ title, description, confirmLabel, onConfirm
   );
 }
 
-export function SelectControl({ label, value, options, onChange, disabled = false }: {
+export function SelectControl(props: {
+  label: string; value: string; options: Choice[]; onChange: (value: string) => void; disabled?: boolean; searchable?: boolean; searchLabel?: string;
+}) {
+  return props.searchable || props.options.length > 15
+    ? <SearchableSelect {...props} />
+    : <SimpleSelectControl {...props} />;
+}
+
+function SimpleSelectControl({ label, value, options, onChange, disabled = false }: {
   label: string; value: string; options: Choice[];
   onChange: (value: string) => void; disabled?: boolean;
 }) {

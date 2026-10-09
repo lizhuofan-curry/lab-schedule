@@ -488,6 +488,26 @@ export const memberWorkRecords = pgTable("member_work_records", {
   check("work_revision_positive", sql`${t.revision} > 0`),
 ]);
 
+export const graphAnalysisState = pgTable("graph_analysis_state", {
+  id: integer("id").primaryKey(),
+  inputVersion: text("input_version").notNull(),
+  status: text("status").$type<"pending" | "running" | "ready" | "failed">().notNull(),
+  model: text("model").notNull(),
+  themes: jsonb("themes").$type<{ label: string; sourceIds: string[] }[]>().default([]).notNull(),
+  analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+  attempts: integer("attempts").default(0).notNull(),
+  retryAt: timestamp("retry_at", { withTimezone: true }).notNull(),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  calls: bigint("calls", { mode: "number" }).default(0).notNull(),
+  inputTokens: bigint("input_tokens", { mode: "number" }).default(0).notNull(),
+  outputTokens: bigint("output_tokens", { mode: "number" }).default(0).notNull(),
+}, (t) => [
+  check("graph_state_singleton", sql`${t.id} = 1`),
+  check("graph_state_values", sql`${t.status} in ('pending','running','ready','failed') and ${t.attempts} >= 0 and ${t.calls} >= 0 and ${t.inputTokens} >= 0 and ${t.outputTokens} >= 0`),
+  check("graph_state_version", sql`${t.inputVersion} ~ '^[0-9a-f]{64}$'`),
+]);
+
 export const studentRelations = relations(students, ({ one, many }) => ({
   user: one(users, { fields: [students.userId], references: [users.id] }),
   courses: many(courses),

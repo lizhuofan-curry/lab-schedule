@@ -10,6 +10,7 @@
     "test": "node --test --experimental-strip-types src/lib/*.test.ts",
     "test:integration": "node --experimental-test-module-mocks --import tsx --conditions react-server --test --test-concurrency=1 test/*.test.mts",
     "test:tasks-browser": "node --import tsx --conditions react-server test/tasks.browser.mts",
+    "test:graph-browser": "node --import tsx --conditions react-server test/graph.browser.mts",
     "test:performance": "node --import tsx --conditions react-server scripts/performance-baseline.mts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

@@ -1,5 +1,68 @@
 @import "tailwindcss";
 
+.graph-workspace { min-width: 0; }
+.graph-controls { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; }
+.graph-controls label, .graph-control { display: grid; gap: 6px; min-width: 0; font-size: 13px; color: var(--ink-soft); }
+.searchable-select { min-width: 0; }
+.graph-controls .task-select-trigger { min-height: 44px; border-radius: 10px; font-size: 14px; }
+.graph-controls .task-select-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchable-select-panel { position: fixed; inset: auto; margin: 0; padding: 0; border: 1px solid var(--line-dark); border-radius: 12px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); overflow: hidden; outline: none; display: none; flex-direction: column; }
+.searchable-select-panel:popover-open { display: flex; }
+.searchable-select-search { display: flex; align-items: center; gap: 8px; margin: 10px; padding: 0 10px; border: 1px solid var(--line-dark); border-radius: 8px; color: var(--ink-soft); flex-shrink: 0; }
+.searchable-select-search:focus-within { border-color: var(--forest); box-shadow: 0 0 0 2px color-mix(in srgb, var(--forest) 10%, transparent); }
+.searchable-select-search input[role=combobox], .searchable-select-search input[role=combobox]:focus { min-width: 0; width: 100%; min-height: 42px; padding: 8px 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent; color: var(--ink); font-size: 16px; }
+.searchable-select-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
+.searchable-select-group { padding: 10px 10px 5px; font-size: 12px; color: var(--ink-soft); }
+.searchable-select-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 9px 10px; border-radius: 7px; font-size: 16px; cursor: pointer; overflow-wrap: anywhere; }
+.searchable-select-option.highlighted { background: var(--surface-soft); }
+.searchable-select-option[aria-selected=true] { color: var(--forest-2); font-weight: 700; }
+.searchable-select-option svg { flex-shrink: 0; }
+.searchable-select-empty { padding: 12px 10px; margin: 0; color: var(--ink-soft); font-size: 14px; }
+.graph-controls > label > input { min-width: 0; width: 100%; min-height: 44px; border: 1px solid var(--line-dark); border-radius: 10px; padding: 8px 12px; background: var(--panel); color: var(--ink); }
+.graph-meta, .graph-detail header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.graph-meta { margin: 10px 0; font-size: 13px; color: var(--ink-soft); }
+.graph-gesture-hint { margin: 0; padding: 0 16px 12px; color: var(--ink-soft); font-size: 12px; }
+.graph-stage { display: flex; min-width: 0; align-items: stretch; gap: 14px; }
+.graph-canvas-wrap { position: relative; min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; overflow-anchor: none; background: var(--panel); }
+.graph-canvas { display: block; width: 100%; height: min(65vh, 650px); min-height: 340px; touch-action: none; cursor: grab; }
+.graph-canvas:active { cursor: grabbing; }
+.graph-edge { stroke: var(--line-dark); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.graph-edge.inferred { stroke: var(--rust); stroke-dasharray: 6 5; }
+.graph-edge.highlighted { stroke: var(--forest-2); stroke-width: 1; }
+.graph-node { cursor: grab; }
+.graph-node circle { stroke: var(--panel); stroke-width: 1.5; fill: var(--forest-2); }
+.graph-node.group circle, .graph-legend i.group { fill: var(--rust); background: var(--rust); }
+.graph-node.work circle, .graph-legend i.work { fill: var(--course-4-accent); background: var(--course-4-accent); }
+.graph-node.task circle, .graph-legend i.task { fill: var(--course-3-accent); background: var(--course-3-accent); }
+.graph-node.theme circle, .graph-legend i.theme { fill: var(--course-5-accent); background: var(--course-5-accent); }
+.graph-node.selected circle { stroke: var(--ink); stroke-width: 4; }
+.graph-node text { fill: var(--ink-soft); font-size: 14px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-soft); }
+.graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.graph-legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--forest-2); }
+.graph-detail { flex: 0 0 320px; max-width: 100%; min-width: 0; max-height: 740px; overflow-y: auto; border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--panel); overflow-wrap: anywhere; }
+.graph-detail h2 { margin: 8px 0; font-size: 20px; }
+.graph-detail h3 { font-size: 15px; }
+.graph-detail p, .graph-detail small { font-size: 13px; color: var(--ink-soft); }
+.graph-source-text { white-space: pre-wrap; font-size: 14px; }
+.graph-connections { padding: 0; list-style: none; }
+.graph-connections li { display: grid; margin-bottom: 8px; }
+.graph-connections button { text-align: left; justify-content: flex-start; padding: 2px 0; }
+.graph-node-list { margin: 14px 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.graph-node-list summary { cursor: pointer; font-size: 14px; }
+.graph-node-list > div { display: flex; flex-wrap: wrap; max-height: 240px; overflow-y: auto; }
+.graph-analysis, .graph-footnote { color: var(--ink-soft); font-size: 13px; }
+.graph-notice { padding: 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; }
+.graph-empty { position: absolute; top: 45%; left: 16px; right: 16px; text-align: center; color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .graph-controls { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .graph-controls label:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .graph-stage { flex-direction: column; }
+  .graph-detail { flex: auto; max-height: 60vh; }
+  .graph-meta { align-items: flex-start; }
+  .graph-canvas { height: 52vh; }
+}
+
 :root {
   --ink: #17243a;
   --ink-soft: #5b6678;
@@ -930,9 +993,12 @@ html[data-theme="night"] .leader-chip { background: #3a3324; color: #f0cc73; }
 .task-select-trigger span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .task-select-trigger svg, .task-date-trigger svg { flex-shrink: 0; color: var(--ink-soft); }
 .task-select-trigger:hover, .task-date-trigger:hover { border-color: var(--forest-2); }
+.task-select-trigger[aria-expanded=true] { border-color: var(--forest-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--forest) 10%, transparent); }
+.task-select-trigger[aria-expanded=true] > svg { transform: rotate(180deg); }
 .task-select-trigger:focus-visible, .task-date-trigger:focus-visible, .task-calendar button:focus-visible, .task-date-shortcuts button:focus-visible { outline: 2px solid var(--forest-2); outline-offset: 3px; }
 .task-select-trigger:disabled, .task-date-trigger:disabled { opacity: .65; cursor: default; }
 .task-select-menu { position: fixed; inset: auto; margin: 0; padding: 6px; border: 1px solid var(--line-dark); border-radius: 12px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); overflow-y: auto; overscroll-behavior: contain; }
+.task-select-menu, .searchable-select-options { scrollbar-width: thin; scrollbar-color: var(--line-dark) transparent; }
 .task-select-menu [role=option] { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 7px; font-size: 16px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
 .task-select-menu [role=option].highlighted { background: var(--surface-soft); }
 .task-select-menu [role=option][aria-selected=true] { color: var(--forest-2); font-weight: 700; }

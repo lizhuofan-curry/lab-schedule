@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   if (session) return NextResponse.next();
 
   const guest = request.cookies.get(GUEST_COOKIE)?.value === "1";
-  const memberOnly = request.nextUrl.pathname.startsWith("/my-schedule") || request.nextUrl.pathname.startsWith("/registration") || request.nextUrl.pathname.startsWith("/notifications") || request.nextUrl.pathname.startsWith("/tasks/");
+  const memberOnly = request.nextUrl.pathname.startsWith("/my-schedule") || request.nextUrl.pathname.startsWith("/registration") || request.nextUrl.pathname.startsWith("/notifications") || request.nextUrl.pathname.startsWith("/tasks/") || request.nextUrl.pathname.startsWith("/graph");
   if (guest && !memberOnly) return NextResponse.next();
   if (guest && memberOnly) return NextResponse.redirect(new URL("/dashboard", request.url));
 
@@ -27,5 +27,6 @@ export const config = {
     "/registration/:path*",
     "/tasks/:path*",
     "/notifications/:path*",
+    "/graph/:path*",
   ],
 };
