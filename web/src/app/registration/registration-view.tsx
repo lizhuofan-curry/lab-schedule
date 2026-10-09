@@ -5,7 +5,7 @@ import type { RegistrationOverview } from "@/lib/registration-service";
 import { CheckCircle2, Clipboard, Search, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
 
-export function RegistrationView({ overview }: { overview: RegistrationOverview }) {
+export function RegistrationView({ overview, currentUser }: { overview: RegistrationOverview; currentUser: { name: string; studentNo: string } }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "registered" | "pending">("all");
   const rows = overview.members.filter((member) =>
@@ -21,7 +21,7 @@ export function RegistrationView({ overview }: { overview: RegistrationOverview 
   }
 
   return (
-    <AppShell>
+    <AppShell currentUser={currentUser}>
       <PageHeader
         eyebrow="实验室成员"
         title="注册情况"

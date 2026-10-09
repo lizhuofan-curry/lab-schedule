@@ -26,7 +26,7 @@ export function AppFeaturesProvider({ graphAvailable, children }: { graphAvailab
 }
 export function useGraphAvailable() { return useContext(GraphFeature); }
 
-export function AppShell({ children, currentUser = { name: "李卓凡", studentNo: "2510250877" }, guest = false }: { children: React.ReactNode; currentUser?: { name: string; studentNo: string }; guest?: boolean }) {
+export function AppShell({ children, currentUser, guest = false }: { children: React.ReactNode; currentUser: { name: string; studentNo: string }; guest?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);

@@ -1,6 +1,6 @@
 import { chromium, expect, type BrowserContext } from "@playwright/test";
 import { loadEnvFile } from "node:process";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -16,6 +16,7 @@ const admin = postgres({ host: "127.0.0.1", port: 5433, database: "postgres", us
 await admin.unsafe(`CREATE DATABASE "${database}"`);
 const sql = postgres({ host: "127.0.0.1", port: 5433, database, username: "schedule", password, max: 1 });
 await migrate(drizzle(sql), { migrationsFolder: "drizzle" });
+if (spawnSync(process.execPath, ["scripts/seed-initial-data.mjs"], { env: { ...process.env, DATABASE_URL: `postgresql://schedule:${encodeURIComponent(password)}@127.0.0.1:5433/${database}` }, stdio: "ignore" }).status !== 0) throw new Error("隔离测试学期初始化失败。");
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3023", "--hostname", "127.0.0.1"], { env: { ...process.env, DATABASE_URL: `postgresql://schedule:${encodeURIComponent(password)}@127.0.0.1:5433/${database}`, BETTER_AUTH_URL: origin, BETTER_AUTH_TRUSTED_ORIGINS: origin, AUTH_DISABLE_RATE_LIMIT: "1", V3_GRAPH_ENABLED: "1", V3_ANALYSIS_ENABLED: "1", DEEPSEEK_API_KEY: "", TYPESAFE_API_KEY: "", NEXT_DIST_DIR: process.env.NEXT_DIST_DIR || ".next-v3" }, stdio: "ignore" });
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 const checks: string[] = [], errors: string[] = [];
@@ -38,6 +39,23 @@ try {
   browser = await chromium.launch({ channel: "msedge", headless: true });
   const a = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), b = await browser.newContext();
   await register(a, "合成发布甲", "v3-browser-a"); await register(b, "合成执行乙", "v3-browser-b");
+  for (const [context, name, username] of [[a, "合成发布甲", "v3-browser-a"], [b, "合成执行乙", "v3-browser-b"]] as const) {
+    const identityPage = await context.newPage();
+    for (const width of [1440, 390]) {
+      await identityPage.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+      for (const from of ["/dashboard", "/tasks", "/groups"]) {
+        await identityPage.goto(origin + from);
+        if (width === 390) await identityPage.getByRole("button", { name: "打开账户菜单", exact: true }).click();
+        await identityPage.getByRole("navigation", { name: "主要导航", exact: true }).getByRole("link", { name: "注册情况", exact: true }).click();
+        await identityPage.waitForURL("**/registration");
+        await expect(identityPage.locator(".current-user strong")).toHaveText(name);
+        await expect(identityPage.locator(".current-user small")).toHaveText(username);
+        expect((await (await context.request.get(origin + "/api/auth/get-session")).json()).user.username).toBe(username);
+      }
+    }
+    await identityPage.close();
+  }
+  checks.push("A/B独立会话、桌面/手机从总览/任务/小组点击注册情况均保持本人姓名学号和真实会话");
   const options = await api(a, "/api/task-options");
   const bid = options.members.find((m: { name: string }) => m.name === "合成执行乙").id;
   const group = await api(a, "/api/groups", { name: "合成实验小组" });
@@ -57,6 +75,15 @@ try {
     await expect(page.locator(".graph-meta")).toContainText("当前范围全部节点");
     const graph = await api(a, "/api/graph");
     await expect(page.locator(".graph-node")).toHaveCount(graph.nodes.length);
+    const radii = await page.locator(".graph-node").evaluateAll(nodes => nodes.map(node => {
+      const circle = node.querySelector("circle")!;
+      return { id: node.getAttribute("data-node-id")!, radius: circle.r.baseVal.value * Math.hypot(circle.getScreenCTM()!.a, circle.getScreenCTM()!.b) };
+    }));
+    const degrees = new Map<string, number>();
+    for (const edge of graph.edges) { degrees.set(edge.from, (degrees.get(edge.from) ?? 0) + 1); degrees.set(edge.to, (degrees.get(edge.to) ?? 0) + 1); }
+    expect(radii.every(node => node.radius >= 2.49 && node.radius <= 7.01)).toBeTruthy();
+    const sorted = radii.sort((x, y) => (degrees.get(x.id) ?? 0) - (degrees.get(y.id) ?? 0));
+    for (let i = 1; i < sorted.length; i++) expect(sorted[i].radius + .01).toBeGreaterThanOrEqual(sorted[i - 1].radius);
     const started = performance.now();
     await page.getByRole("button", { name: "查看范围", exact: true }).click();
     const scopeSearch = page.getByRole("combobox", { name: "搜索成员或小组" });
@@ -78,7 +105,9 @@ try {
     await page.getByRole("button", { name: "工作记录 · 历史EEG实验", exact: true }).click();
     await expect(page.locator(".graph-source-text")).toContainText("虚构记录");
     await page.getByRole("button", { name: "关闭节点详情" }).click();
+    const border = await page.locator(".graph-node circle").evaluate(circle => ({ stroke: getComputedStyle(circle).stroke, width: getComputedStyle(circle).strokeWidth }));
     await page.locator(".graph-node circle").click();
+    expect(await page.locator(".graph-node.selected circle").evaluate(circle => ({ stroke: getComputedStyle(circle).stroke, width: getComputedStyle(circle).strokeWidth }))).toEqual(border);
     await expect(page.locator(".graph-source-text")).toContainText("虚构记录");
     await page.getByRole("button", { name: "关闭节点详情" }).click();
     await page.getByLabel("搜索节点").fill("");
@@ -88,6 +117,7 @@ try {
     await page.getByRole("combobox", { name: "来源状态", exact: true }).click();
     await page.getByRole("option", { name: "全部状态", exact: true }).click();
     checks.push(`${width}px 统一下拉样式、范围搜索/空结果、Enter选择、Esc返回焦点与状态切换通过`);
+    checks.push(`${width}px 初始节点半径2.5～7px、按连接数递增、选中不增加或变黑边框`);
     await expect(page.locator(".graph-canvas")).toHaveAttribute("data-layout-state", "settled");
     const box = await page.locator(".graph-canvas").boundingBox();
     await expect(page.getByRole("button", { name: "放大关系图" })).toHaveCount(0);
@@ -178,8 +208,11 @@ try {
   const guest = await browser.newContext(); await guest.request.post(`${origin}/api/guest-session`);
   expect((await guest.request.get(origin + "/api/graph")).status()).toBe(403);
   const gp = await guest.newPage(); await gp.goto(origin + "/graph"); await gp.waitForURL("**/dashboard");
+  await gp.goto(origin + "/registration"); await gp.waitForURL("**/dashboard");
   await expect(gp.getByRole("link", { name: "工作关系图", exact: true })).toHaveCount(0);
   const anonymous = await browser.newContext(); expect((await anonymous.request.get(origin + "/api/graph")).status()).toBe(401);
+  const anonymousPage = await anonymous.newPage(); await anonymousPage.goto(origin + "/registration"); await anonymousPage.waitForURL(/\/login\?next=/);
+  checks.push("游客/匿名不能读取注册情况页面");
   checks.push("游客图/API/导航拒绝，匿名API401");
   expect(errors).toEqual([]);
   await writeFile(`${output}/result.json`, JSON.stringify({ checks, errors, source: "isolated synthetic database; recommendation removed", taskId: task.id }, null, 2));

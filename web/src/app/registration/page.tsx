@@ -10,5 +10,5 @@ export default async function RegistrationPage() {
   if (!member) redirect("/login?next=/registration");
 
   const overview = await getRegistrationOverview();
-  return <RegistrationView overview={overview} />;
+  return <RegistrationView overview={overview} currentUser={{ name: member.name, studentNo: member.studentNo }} />;
 }
