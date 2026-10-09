@@ -17,3 +17,16 @@ export const graphThemesSchema = z.object({
   }).strict()).max(40),
 }).strict();
 export type GraphTheme = z.infer<typeof graphThemesSchema>["themes"][number];
+
+const safeText = (max: number) => z.string().trim().min(1).max(max).refine(text => !/[<>]|https?:|javascript:|data:/i.test(text));
+export const graphRelationsSchema = z.object({ relations: z.array(z.object({
+  from: graphSourceKeySchema, to: graphSourceKeySchema,
+  type: z.enum(["similar", "method", "upstream"]),
+  reason: safeText(400), fromEvidence: safeText(300), toEvidence: safeText(300),
+}).strict().refine(r => r.from !== r.to)).max(500) }).strict();
+export type GraphRelation = z.infer<typeof graphRelationsSchema>["relations"][number];
+export const graphFeedbackSchema = z.object({
+  edgeId: z.string().regex(/^ai\/(work|round):[1-9]\d*\/(work|round):[1-9]\d*\/(similar|method|upstream)$/).max(150),
+  version: z.string().regex(/^[a-f0-9]{64}$/),
+  reason: z.string().trim().min(1).max(1000),
+}).strict();

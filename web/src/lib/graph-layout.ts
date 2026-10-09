@@ -13,12 +13,12 @@ function tree(points: Point[], left: number, top: number, width: number, depth =
   cell.children = buckets.map((bucket, i) => tree(bucket, left + i % 2 * half, top + Math.floor(i / 2) * half, half, depth + 1));
   return cell;
 }
-function repel(p: Point, cell: Cell, alpha: number) {
+function repel(p: Point, cell: Cell, alpha: number, strengthScale = 1) {
   if (!cell.mass) return;
   if (cell.points) {
     for (const q of cell.points) if (q !== p) {
       const dx = p.x - q.x, dy = p.y - q.y, squared = Math.max(25, dx * dx + dy * dy);
-      const strength = 160 * alpha / squared;
+      const strength = 160 * alpha * strengthScale / squared;
       p.vx += dx * strength; p.vy += dy * strength;
       const distance = Math.sqrt(squared);
       if (distance < 42) { const push = (42 - distance) / distance * .18; p.vx += dx * push; p.vy += dy * push; }
@@ -28,8 +28,8 @@ function repel(p: Point, cell: Cell, alpha: number) {
   const dx = p.x - cell.x, dy = p.y - cell.y, squared = Math.max(25, dx * dx + dy * dy);
   const contains = p.x >= cell.left && p.x <= cell.left + cell.width && p.y >= cell.top && p.y <= cell.top + cell.width;
   if (!contains && cell.width * cell.width < squared * .64) {
-    const strength = 160 * alpha * cell.mass / squared; p.vx += dx * strength; p.vy += dy * strength;
-  } else for (const child of cell.children!) repel(p, child, alpha);
+    const strength = 160 * alpha * strengthScale * cell.mass / squared; p.vx += dx * strength; p.vy += dy * strength;
+  } else for (const child of cell.children!) repel(p, child, alpha, strengthScale);
 }
 
 // Keep unrelated nodes clear of a link's interior without adding graph edges.
@@ -61,7 +61,10 @@ export function seedGraphPositions(nodes: GraphNode[]) {
     return [n.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius }] as const;
   }));
 }
-export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [], initial = seedGraphPositions(nodes)) {
+export type GraphForces = { center: number; repel: number; link: number; distance: number };
+export const defaultGraphForces: GraphForces = { center: 1, repel: 1, link: 1, distance: 1 };
+export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [], initial = seedGraphPositions(nodes), settings: GraphForces = defaultGraphForces) {
+  let forces = { ...settings };
   const points: Point[] = [...nodes].sort((a, b) => a.id.localeCompare(b.id)).map((n, index) => {
     const angle = index * Math.PI * (3 - Math.sqrt(5)), radius = 38 * Math.sqrt(index);
     return { id: n.id, ...(initial.get(n.id) ?? { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius }), vx: 0, vy: 0 };
@@ -80,10 +83,10 @@ export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [
     const left = Math.min(...points.map(p => p.x)) - 1, top = Math.min(...points.map(p => p.y)) - 1;
     const width = Math.max(Math.max(...points.map(p => p.x)) - left, Math.max(...points.map(p => p.y)) - top) + 2;
     const root = tree(points, left, top, width);
-    for (const p of points) repel(p, root, alpha);
+    for (const p of points) repel(p, root, alpha, forces.repel);
     for (const { a, b, length } of links) {
       const dx = b.x - a.x, dy = b.y - a.y, distance = Math.max(1, Math.hypot(dx, dy));
-      const force = (distance - length) / distance * .12 * alpha;
+      const force = (distance - length * forces.distance) / distance * .12 * alpha * forces.link;
       const bias = (degrees.get(a.id) ?? 1) / ((degrees.get(a.id) ?? 1) + (degrees.get(b.id) ?? 1));
       a.vx += dx * force * (1 - bias); a.vy += dy * force * (1 - bias);
       b.vx -= dx * force * bias; b.vy -= dy * force * bias;
@@ -94,7 +97,7 @@ export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [
       // A soft circular envelope keeps sparse leaf branches within the cloud;
       // positions inside remain governed by the actual links and repulsion.
       const radius = Math.max(1, Math.hypot(p.x, p.y));
-      const inward = .08 * Math.min(1, points.length / 20) + Math.max(0, radius - cloudRadius) / radius * .18;
+      const inward = .08 * forces.center * Math.min(1, points.length / 20) + Math.max(0, radius - cloudRadius) / radius * .18;
       p.vx = (p.vx - p.x * inward * alpha) * .72; p.vy = (p.vy - p.y * inward * alpha) * .72;
       p.x += Math.max(-20, Math.min(20, p.vx)); p.y += Math.max(-20, Math.min(20, p.vy));
     }
@@ -102,6 +105,7 @@ export function createGraphSimulation(nodes: GraphNode[], edges: GraphEdge[] = [
   }
   return {
     tick,
+    setForces(next: GraphForces) { forces = { ...next }; alpha = Math.max(alpha, .6); },
     get running() { return points.length > 0 && alpha >= .005; },
     positions: () => new Map(points.map(p => [p.id, { x: p.x, y: p.y }])),
     pin(id: string, x: number, y: number) { const p = lookup.get(id); if (p) { p.fixed = { x, y }; p.x = x; p.y = y; alpha = Math.max(alpha, .4); } },

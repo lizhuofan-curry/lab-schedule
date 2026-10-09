@@ -9,9 +9,11 @@ export type GraphSnapshot = {
   tasks: { id: number; publisherId: number; kind: string; status: string; currentRound: number; revision: number }[];
   rounds: { id: number; taskId: number; number: number; title: string; description: string; directIds: number[]; groupIds: number[]; deadline: string | null; endedAt: string | null; outcome: string | null }[];
   participants: { roundId: number; studentId: number; active: boolean; generation: number }[];
+  courses?: { id: number; studentId: number; semesterId: number; name: string; location: string | null; weekday: number; startPeriod: number; endPeriod: number; weeks: number[] }[];
 };
 export type GraphNode = { id: string; kind: "member" | "group" | "work" | "task" | "theme"; label: string; status: string; currentLoad: boolean; sourceKey?: string };
-export type GraphEdge = { id: string; from: string; to: string; kind: "fact" | "inferred"; label: string };
+export type GraphEdge = { id: string; from: string; to: string; kind: "fact" | "inferred"; label: string;
+  detail?: { reason: string; fromEvidence?: string; toEvidence?: string; analyzedAt?: string; courses?: { name: string; location: string; weekday: number; startPeriod: number; endPeriod: number; weeks: number[] }[] } };
 export type GraphSource = { key: string; title: string; description: string; status: string; owner: string; round?: number; currentLoad: boolean; deadline?: string | null };
 export type GraphData = {
   nodes: GraphNode[]; edges: GraphEdge[]; version: string; asOf: string; scope: GraphScope;

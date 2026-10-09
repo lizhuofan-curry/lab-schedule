@@ -161,3 +161,12 @@ DELETE `/api/notifications`：注册启用成员，校验本站Origin，256KiB�
 当前任务关系按现有directIds/groupIds和当前合格小组成员解析，结束轮次按固定参与名单；过去参与与当前承担标记不同。小组范围表示当前成员经历汇总，不能标成历史小组交付。本人工作CRUD、原成员页近期窗口和任务权限照旧。
 
 AI主题契约：每份模型结果绑定当前源数据版本和真实来源ID；版本变化后不显示旧主题，后台重新分析。来源每次重新授权读取，禁止旧请求复活删除内容。仅图与来源读取接口属于本期；不提供候选推荐接口。开关、隔离验证及正式可用性以07-TASKS为准。
+
+
+## V3.1 关联详情与反馈
+
+GET /api/graph沿用注册启用成员和严格范围参数，private,no-store。edges新增可选detail：AI含reason、fromEvidence、toEvidence、analyzedAt；同课含reason及courses数组(name,location,weekday,startPeriod,endPeriod,weeks)。AI边ID为ai/{work或round来源}/{另一来源}/{similar|method|upstream}，upstream的from指向to；对称关系来源ID排序去重。课程边course/member:{小ID}/member:{大ID}。只返回当前图可见两端，不新增课程或主题节点。
+
+POST /api/graph/feedback严格接收{edgeId,version,reason}，reason trim后1至1000字、version为当前SHA-256。memberFor(write=true)验证会话和Origin，快照再次检查启用状态，所有者来自会话，不接受studentId。仅当前授权有效AI线可反馈；真实、未知或旧版本拒绝。结构校验沿用INVALID_COMMAND 422；服务层INVALID_FEEDBACK 422；GRAPH_CHANGED 409提示重新读取；游客403、匿名401、图关闭404。成功data.message为“已记录，不会立即修改公共关系图。”；重复幂等，不修改公共图，无反馈GET或公开列表。
+
+返回AI前校验两端引用逐字来自当前脱敏标题／说明；拒绝自环、非法类型、未知／完成／旧轮来源及危险HTML／链接。分析异常保留事实图。同课按系统规则核验，不信任模型生成课程事实。历史来源及本人写权限不变。

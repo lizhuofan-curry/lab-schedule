@@ -20,13 +20,14 @@ const s = await import("@/db/schema");
 const { eq } = await import("drizzle-orm");
 const { migrate } = await import("drizzle-orm/postgres-js/migrator");
 const { auth } = await import("@/lib/auth");
-const { getGraph, graphSnapshot, graphVersion, getGraphSource } = await import("@/lib/graph-service");
+const { getGraph, graphSnapshot, graphVersion, getGraphSource, submitGraphFeedback } = await import("@/lib/graph-service");
 const { runGraphAnalysisOnce, readGraphAnalysis } = await import("@/lib/graph-analysis-service");
 const { redactGraphText } = await import("@/lib/graph-model");
 const { createWork, updateWork, deleteWork, listMemberWork } = await import("@/lib/work-service");
 const { createGroup, addGroupMember } = await import("@/lib/group-service");
 const { TaskError } = await import("@/lib/task-service");
 const graphRoute = await import("@/app/api/graph/route");
+const feedbackRoute = await import("@/app/api/graph/feedback/route");
 const sourceRoute = await import("@/app/api/graph/sources/[key]/route");
 type Actor = { userId: string; studentId: number; studentNo: string; name: string };
 let a: Actor, b: Actor, c: Actor;
@@ -99,11 +100,13 @@ test("模型脱敏涵盖正文姓名/账号/邮箱/凭据，未知来源和HTML�
     mock.restoreAll();
   }
 });
-test("删除即时移除来源/主题，途中模型返回不得复活，后台合并变更", async () => {
+test("删除即时移除来源/内容关联，途中模型返回不得复活，后台合并变更", async () => {
   const w = await createWork(workInput, b);
+  const support = await createWork(workInput, a);
+  const relation = { from: `work:${w.id}`, to: `work:${support.id}`, type: "similar" as const, reason: "同为EEG实验", fromEvidence: "EEG实验", toEvidence: "EEG实验" };
   const snapshot = await graphSnapshot(a), version = graphVersion(snapshot);
-  await db.insert(s.graphAnalysisState).values({ id: 1, inputVersion: version, status: "ready", model: "fixture", themes: [{ label: "EEG", sourceIds: [`work:${w.id}`] }], analyzedAt: new Date(), retryAt: new Date() }).onConflictDoUpdate({ target: s.graphAnalysisState.id, set: { inputVersion: version, status: "ready", themes: [{ label: "EEG", sourceIds: [`work:${w.id}`] }] } });
-  assert.ok((await getGraph({ scope: "all" }, a)).nodes.some((n) => n.kind === "theme"));
+  await db.insert(s.graphAnalysisState).values({ id: 1, inputVersion: version, status: "ready", model: "fixture", relations: [relation], analyzedAt: new Date(), retryAt: new Date() }).onConflictDoUpdate({ target: s.graphAnalysisState.id, set: { inputVersion: version, status: "ready", relations: [relation] } });
+  assert.ok((await getGraph({ scope: "all" }, a)).edges.some(e => e.kind === "inferred"));
   await deleteWork(w.id, 1, b);
   await assert.rejects(getGraphSource(`work:${w.id}`, a), code("GRAPH_SOURCE_NOT_FOUND"));
   const next = await getGraph({ scope: "all" }, a);
@@ -113,7 +116,7 @@ test("删除即时移除来源/主题，途中模型返回不得复活，后台�
   await db.update(s.graphAnalysisState).set({ inputVersion: current, status: "pending", themes: [], retryAt: new Date(0), leaseToken: null }).where(eq(s.graphAnalysisState.id, 1));
   mock.method(globalThis, "fetch", async () => {
     await deleteWork(x.id, 1, b);
-    return Response.json({ model: "deepseek-flash", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ themes: [{ label: "过期主题", sourceIds: [`work:${x.id}`] }] }) } }], usage: { prompt_tokens: 5, completion_tokens: 5 } });
+    return Response.json({ model: "deepseek-flash", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ relations: [{ ...relation, from: `work:${x.id}` }] }) } }], usage: { prompt_tokens: 5, completion_tokens: 5 } });
   });
   await runGraphAnalysisOnce();
   assert.ok(!(await getGraph({ scope: "all" }, a)).nodes.some((n) => n.label === "过期主题"));
@@ -121,6 +124,8 @@ test("删除即时移除来源/主题，途中模型返回不得复活，后台�
   assert.equal(state.status, "pending"); assert.equal(state.themes.length, 0);
 });
 test("单个分析租约防重复、失败退避，缺凭据保留真实关系，停用账号拒绝", async () => {
+  await createWork(workInput, a);
+  await createWork(workInput, b);
   const version = graphVersion(await graphSnapshot(a));
   await db.update(s.graphAnalysisState).set({ inputVersion: version, status: "pending", themes: [], retryAt: new Date(0), attempts: 0, leaseToken: null }).where(eq(s.graphAnalysisState.id, 1));
   let requests = 0;
@@ -135,4 +140,61 @@ test("单个分析租约防重复、失败退避，缺凭据保留真实关系�
   await assert.rejects(graphSnapshot(c), code("UNAUTHORIZED"));
   assert.ok(!(await getGraph({ scope: "all" }, a)).nodes.some((n) => n.id === `member:${c.studentId}`));
   await db.update(s.students).set({ enabled: true }).where(eq(s.students.id, c.studentId));
+});
+
+
+test("V3.1关联反馈按会话归属、重复幂等，旧版/事实线/伪造身份及匿名游客拒绝", async () => {
+  const x = await createWork(workInput, a), y = await createWork(workInput, b);
+  const snapshot = await graphSnapshot(a), version = graphVersion(snapshot);
+  const [from, to] = [`work:${x.id}`, `work:${y.id}`].sort();
+  const relation = { from, to, type: "similar" as const, reason: "同为EEG实验", fromEvidence: "EEG实验", toEvidence: "EEG实验" };
+  await db.update(s.graphAnalysisState).set({ inputVersion: version, status: "ready", relations: [relation], analyzedAt: new Date() }).where(eq(s.graphAnalysisState.id, 1));
+  const input = { edgeId: `ai/${from}/${to}/similar`, version, reason: "只有标题相似，依据不足" };
+  await Promise.all([submitGraphFeedback(input, a), submitGraphFeedback(input, a)]);
+  const rows = await db.select().from(s.graphRelationFeedback); assert.equal(rows.length, 1); assert.equal(rows[0].studentId, a.studentId);
+  assert.equal((await getGraph({ scope: "all" }, b)).edges.filter(e => e.kind === "inferred").length, 1);
+  assert.equal((await feedbackRoute.POST(request("/api/graph/feedback", b, input))).status, 200);
+  assert.equal((await feedbackRoute.POST(request("/api/graph/feedback", a, { ...input, studentId: b.studentId }))).status, 422);
+  for (const guest of [false, true]) assert.equal((await feedbackRoute.POST(request("/api/graph/feedback", undefined, input, guest))).status, guest ? 403 : 401);
+  await assert.rejects(submitGraphFeedback({ ...input, version: "f".repeat(64) }, a), code("GRAPH_CHANGED"));
+  await assert.rejects(submitGraphFeedback({ ...input, edgeId: "ai/work:999/work:1000/similar" }, a), code("GRAPH_CHANGED"));
+  await deleteWork(x.id, 1, a); await assert.rejects(submitGraphFeedback(input, b), code("GRAPH_CHANGED"));
+  assert.equal((await getGraph({ scope: "all" }, a)).edges.filter(e => e.kind === "inferred").length, 0);
+  process.env.V3_ANALYSIS_ENABLED = "0";
+  await runGraphAnalysisOnce();
+  assert.ok((await db.select().from(s.graphRelationFeedback)).every(r => r.reason === "关联版本已失效，反馈文字已清除。"));
+  process.env.V3_ANALYSIS_ENABLED = "1";
+});
+
+test("V3.1模型请求契约（隔离模拟）、合法证据及重试上限；完成来源不进入输入", async () => {
+  await createWork(workInput, a); await createWork(workInput, b); await createWork({ ...workInput, status: "completed" }, a);
+  const snapshot = await graphSnapshot(a), version = graphVersion(snapshot);
+  await db.update(s.graphAnalysisState).set({ inputVersion: version, status: "pending", retryAt: new Date(0), attempts: 0, leaseToken: null }).where(eq(s.graphAnalysisState.id, 1));
+  mock.method(globalThis, "fetch", async (_url, init) => {
+    const body = JSON.parse(String(init?.body)); const context = JSON.parse(body.messages[1].content).untrustedContext;
+    assert.ok(context.sources.every((s: { status: string }) => s.status === "active" || s.status === "paused"));
+    const serial = JSON.stringify(context); for (const secret of [a.name, a.studentNo, a.userId, b.name, b.studentNo]) assert.ok(!serial.includes(secret));
+    const [x, y] = context.sources;
+    return Response.json({ model: "deepseek-flash", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ relations: [{ from: x.id, to: y.id, type: "similar", reason: "同为EEG实验", fromEvidence: "EEG实验", toEvidence: "EEG实验" }] }) } }], usage: { prompt_tokens: 10, completion_tokens: 10 } });
+  });
+  await runGraphAnalysisOnce(); const ready = await readGraphAnalysis(version); assert.equal(ready.info.status, "ready"); assert.equal(ready.relations.length, 1);
+  await db.update(s.graphAnalysisState).set({ status: "failed", attempts: 5, retryAt: new Date(0) }).where(eq(s.graphAnalysisState.id, 1));
+  mock.restoreAll(); mock.method(globalThis, "fetch", async () => { throw Error("must not call"); });
+  await runGraphAnalysisOnce(); assert.match((await readGraphAnalysis(version)).info.message, /停止/);
+});
+
+
+test("V3.1同课只读取当前学期，实际课程变更即时撤线，无课表备注或教师进入快照", async () => {
+  const [current] = await db.insert(s.semesters).values({ name: "合成当前学期", startDate: "2026-09-01", endDate: "2027-01-30", weekCount: 20, isCurrent: true }).returning();
+  const [past] = await db.insert(s.semesters).values({ name: "合成历史学期", startDate: "2025-09-01", endDate: "2026-01-30", weekCount: 20, isCurrent: false }).returning();
+  const input = { semesterId: current.id, name: "测试信号处理", location: "A楼101", weekday: 2, startPeriod: 1, endPeriod: 2, weeks: [1, 3, 5], teacher: "不发送教师", note: "不发送备注" };
+  const [ca] = await db.insert(s.courses).values({ ...input, studentId: a.studentId }).returning();
+  const [cb] = await db.insert(s.courses).values({ ...input, studentId: b.studentId }).returning();
+  await db.insert(s.courses).values({ ...input, studentId: a.studentId, semesterId: past.id });
+  const snapshot = await graphSnapshot(a); assert.equal(snapshot.courses!.length, 2); assert.ok(!JSON.stringify(snapshot.courses).includes("不发送"));
+  const graph = await getGraph({ scope: "all" }, a); const course = graph.edges.find(e => e.id.startsWith("course/"))!;
+  assert.ok(course); assert.equal(course.kind, "fact"); assert.deepEqual(course.detail!.courses![0].weeks, [1, 3, 5]);
+  await db.update(s.courses).set({ weeks: [2, 4] }).where(eq(s.courses.id, cb.id));
+  assert.ok(!(await getGraph({ scope: "all" }, a)).edges.some(e => e.id.startsWith("course/")));
+  await db.delete(s.courses).where(eq(s.courses.id, ca.id));
 });

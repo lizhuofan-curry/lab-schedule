@@ -1,0 +1,116 @@
+Snapshot:
+  stage: Define
+  problem_statement: 在现有真实关系图中增加DeepSeek工作和任务内容关联，以及课表安排一致的同课关系
+  users_stakeholders_owners: 注册启用成员使用，开发者实现，用户与维护者验收及维护
+  scope: 进行中和暂停工作、进行中任务当前轮、小组角色上下文、当前学期同课关系与AI错误反馈
+  non_goals: 执行人推荐、自动写业务、能力评价、实际到课、课程主题、空闲分析、排期、附件正文、3D
+  primary_invariant: 推断不变成事实，当前来源与权限决定每条线有效性
+  user_confirmation: 1B、2C、3A、4A、5B、6A、7A、8A、9A及最终边界A
+
+grill_decision_packet:
+  goal: 生成V3.1需求文档，为后续有依据的自动内容关联和同课关系开发提供确认契约
+  problem_layer: 内容语义关联缺失及课表关系缺失，不是重做图谱布局或任务决策
+  target_user_or_maintainer: 注册启用成员及项目维护者
+  stakeholders_and_owners:
+    user: 范围确认、质量核对及正式发布决策
+    developer: 契约补齐、实现、验证与证据维护
+    maintainer: 凭据、费用、失败监测、反馈复核及备份回退
+  scope:
+    - 进行中和暂停工作、进行中任务当前轮的内容相近、同方法或有明确依据的上下游关联
+    - 当前学期相同课程名、星期、起止节次、非空教室且有共同周次的同课关系
+    - 成员代号及必要小组、任务角色与课表上下文可发送DeepSeek
+    - 点击线查看依据及注册成员提交不准确关联反馈
+  non_goals: [成员间AI内容线, 小组间AI内容线, 新AI主题节点, 执行人推荐, 自动指派, 自动业务修改, 能力评价, 实际到课, 课程主题, 空闲分析, 排期, 附件正文, 3D]
+  locked_decisions:
+    - 历史节点和真实关系继续保留，已完成工作和旧轮不参与新增AI关联
+    - AI细虚线连接工作和任务，同课细实线直接连接成员且不新增课程节点
+    - DeepSeek允许读取必要课表，但同课条件由系统核验且不扩展其他推断
+    - 通常2分钟内自动更新，失效内容先移除，旧请求不能复活
+    - 反馈附理由，不立即改变公共图，不新增管理员角色
+    - 30条AI联系至少27条合理，10组无关内容最多误连1组，虚构经历等关键错误阻止上线
+    - 本次只交付文档，不实现或正式开启AI
+  tradeoffs_accepted:
+    - 排除历史分析缩小AI范围但保留历史事实
+    - 允许必要课表出站，代号不能保证完全匿名
+    - 精确同课条件可能漏掉课程或教室别名，默认不做语义合并
+    - 两分钟目标允许合并修改，平台故障时明确待更新或失败
+    - 反馈不立即修图，保留维护者复核成本
+  primary_invariant: AI不能创造参与、完成或归属事实，授权和有效来源由服务端当前数据控制
+  success_criteria:
+    - 12-PRD-v3.1.md中的V31-01至V31-10均有独立验证证据
+    - 内容及同课线可点击追溯，失效删除不会泄露原文，核心业务仍可用
+    - 人工质量门槛通过后才允许发布自动分析
+  proof_bar: 单元、权限与并发集成、桌面手机浏览器、真实模型人工评价及备份恢复；本地和正式证据分别记录
+  compatibility_posture: 保持原权限、历史真实关系、现有2D面板与交互，V3.1范围覆盖旧AI全历史和排除课表约定
+  rollout_rollback_posture: 正式分析先关闭，开发默认关闭；本地Linux镜像、成套备份恢复和新发布验收；回退不删业务数据
+  support_and_maintenance_posture: 维护者核对平台余额及失败、反馈复核，不设管理员角色，不新增反馈管理后台
+  researched_facts:
+    - 当前模型只输出主题与来源列表，不包含直接内容关联或课表输入
+    - 工作记录状态为active、paused、completed；任务保留当前轮与历史角色
+    - 课表保存学期、星期、具体周次、起止节次、教室及课程名
+    - 当前图谱独立授权，页面每次读取后约15秒轮询，不使用浏览器缓存
+  default_assumptions:
+    - assumption: 课程名和教室只保守规范化空白，不合并语义别名
+      provenance: model_default
+      confidence: medium
+      verification_plan: 实现前补齐正反例，验证不同楼宇和空字段不匹配
+      consequence_if_wrong: 同一实际课程的别名可能漏连，需要另行确认别名规则
+    - assumption: 反馈仅必要标识、版本、会话身份和理由，不公开全体、不做工单流转
+      provenance: model_default
+      confidence: medium
+      verification_plan: API及存储契约确认、鉴权与删除来源测试
+      consequence_if_wrong: 无法满足后续反馈运营需求，须另行扩展
+    - assumption: 模型和必要课表输入仅用于用户确认的内容关联及同课上下文
+      provenance: user_locked
+      confidence: high
+      verification_plan: 模型请求字段、输出类型及人工评价核对
+      consequence_if_wrong: 扩大数据和推断范围，阻止发布
+  open_questions: []
+  deferred_questions:
+    - id: implementation_contracts
+      question: 具体API、索引、迁移、版本、反馈存储及重试契约
+      owner: 开发者
+      default_action: 实现前补齐02、03、05文档，不改变已确认语义
+      consequence_if_wrong: 失效、权限或反馈行为无法验证，不得发布
+      due_or_trigger: 开始实现前
+    - id: provider_live_validation
+      question: 已选DeepSeek配置是否满足本版真实接口和输出需求
+      owner: 开发者与用户
+      default_action: 沿用独立配置联调，不兼容先报告，不静默换模型
+      consequence_if_wrong: 分析无法执行，保持事实图并停止正式开启
+      due_or_trigger: 真实模型验证前
+    - id: release_date
+      question: 开发及正式开启日期
+      owner: 用户与维护者
+      default_action: 不承诺日期，先完成测试质量及备份验收
+      consequence_if_wrong: 发布时间需重定，不降低验收标准
+      due_or_trigger: 满足发布门槛后
+    - id: recall_and_scale
+      question: 长期召回指标、规模压测和反馈运营扩展
+      owner: 用户与维护者
+      default_action: 本期验证典型漏连案例，不宣传未测召回率及规模能力
+      consequence_if_wrong: 数据增长或误判增加时需扩展验证和反馈处理
+      due_or_trigger: 真实规模增长或质量反馈触发
+  immaterial_questions:
+    - 独立布局重新选型与3D技术不影响本期需求，沿用现有2D
+  lane_status:
+    problem_layer: answered
+    users_stakeholders_owners: researched
+    scope: answered
+    non_goals: answered
+    success_criteria: answered
+    constraints: researched
+    dependencies_prerequisites: deferred
+    interfaces_data_integrations: deferred
+    security_policy_compliance: answered
+    tradeoffs_priorities: answered
+    edge_cases_failure_modes: researched
+    rollout_migration_compatibility: answered
+    verification_observability_acceptance: answered
+    maintenance_support: assumed
+  plan_allowed: true
+
+Clarification_Handoff:
+  final_brief: 在现有只读图中增加当前工作及任务的内容细虚线与同课成员细实线，确保来源、角色、权限和失效可核对
+  locked_decisions: 见grill_decision_packet.locked_decisions
+  remaining_work_boundary: 后续实现与联调，不属于本次需求文档交付；未授权本次直接启用正式分析

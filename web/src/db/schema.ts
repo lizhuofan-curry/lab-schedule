@@ -494,6 +494,7 @@ export const graphAnalysisState = pgTable("graph_analysis_state", {
   status: text("status").$type<"pending" | "running" | "ready" | "failed">().notNull(),
   model: text("model").notNull(),
   themes: jsonb("themes").$type<{ label: string; sourceIds: string[] }[]>().default([]).notNull(),
+  relations: jsonb("relations").$type<import("@/lib/graph-schema").GraphRelation[]>().default([]).notNull(),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
   attempts: integer("attempts").default(0).notNull(),
   retryAt: timestamp("retry_at", { withTimezone: true }).notNull(),
@@ -506,6 +507,20 @@ export const graphAnalysisState = pgTable("graph_analysis_state", {
   check("graph_state_singleton", sql`${t.id} = 1`),
   check("graph_state_values", sql`${t.status} in ('pending','running','ready','failed') and ${t.attempts} >= 0 and ${t.calls} >= 0 and ${t.inputTokens} >= 0 and ${t.outputTokens} >= 0`),
   check("graph_state_version", sql`${t.inputVersion} ~ '^[0-9a-f]{64}$'`),
+]);
+
+export const graphRelationFeedback = pgTable("graph_relation_feedback", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  studentId: bigint("student_id", { mode: "number" }).notNull().references(() => students.id, { onDelete: "restrict" }),
+  edgeId: text("edge_id").notNull(),
+  inputVersion: text("input_version").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  uniqueIndex("graph_feedback_member_edge_version_uidx").on(t.studentId, t.edgeId, t.inputVersion),
+  index("graph_feedback_created_idx").on(t.createdAt),
+  check("graph_feedback_version", sql`${t.inputVersion} ~ '^[a-f0-9]{64}$'`),
+  check("graph_feedback_reason", sql`length(trim(${t.reason})) between 1 and 1000`),
 ]);
 
 export const studentRelations = relations(students, ({ one, many }) => ({
