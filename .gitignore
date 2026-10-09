@@ -14,6 +14,8 @@ web/build-verify/
 web/coverage/
 web/test-results/
 web/playwright-report/
+web/data/
+web/tsconfig.tsbuildinfo
 
 # 密钥与本地环境变量
 web/.env

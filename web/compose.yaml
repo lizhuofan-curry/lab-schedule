@@ -45,6 +45,11 @@ services:
       SCHEDULE_VISION_MODEL: ${SCHEDULE_VISION_MODEL:-}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-}
+      TASK_UPLOAD_DIR: /app/data/task-files
+      TASK_USER_QUOTA_BYTES: ${TASK_USER_QUOTA_BYTES:-209715200}
+      TASK_TOTAL_QUOTA_BYTES: ${TASK_TOTAL_QUOTA_BYTES:-2147483648}
+    volumes:
+      - task_uploads:/app/data/task-files
     depends_on:
       db:
         condition: service_healthy
@@ -84,3 +89,4 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  task_uploads:

@@ -23,7 +23,7 @@ const configuredOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
 const trustedOrigins = [...new Set([authBaseUrl, ...configuredOrigins])];
 
 export const auth = betterAuth({
-  appName: "同频课表",
+  appName: "HenuBCI",
   baseURL: authBaseUrl,
   secret: process.env.BETTER_AUTH_SECRET ?? "build-time-placeholder-secret-change-in-production",
   database: drizzleAdapter(db, {

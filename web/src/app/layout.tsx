@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "同频课表",
+  title: "HenuBCI",
   description: "BCI实验室成员课表与共同空闲时间查询",
 };
 

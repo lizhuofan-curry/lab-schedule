@@ -4,6 +4,7 @@ import { differenceInCalendarDays, getISODay, parseISO } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, Clock3, Search, Users } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
+import { SelectControl } from "@/components/form-controls";
 import { memberGradeLabels, type MemberGrade } from "@/lib/member-grade";
 import type { ScheduleMember } from "@/lib/schedule-service";
 import type { SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
@@ -137,7 +138,7 @@ export function AvailabilityView({ members, savedGroups, initialGroupId, semeste
         {mode === "person" && <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={personId === member.id ? "select-person selected" : "select-person"} onClick={() => { setPersonId(member.id); setLoading(true); setError(""); }}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{personId === member.id && <Check size={14} />}</i></button>)}</div>}
 
         {mode === "group" && <>
-          {savedGroups.length > 0 && <label className="field saved-group-select"><span>快速选择小组</span><select value={selectedGroupId ?? ""} onChange={(event) => { const groupId = Number(event.target.value); const group = savedGroups.find((item) => item.id === groupId); setSelectedGroupId(group?.id ?? null); if (group) setSelected(group.studentIds); setLoading(true); setError(""); }}><option value="">手动选择成员</option>{savedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}（{group.studentIds.length} 人）</option>)}</select></label>}
+          {savedGroups.length > 0 && <div className="field saved-group-select"><span>快速选择小组</span><SelectControl label="快速选择小组" value={selectedGroupId === null ? "" : String(selectedGroupId)} onChange={(value) => { const group = savedGroups.find((item) => item.id === Number(value)); setSelectedGroupId(group?.id ?? null); if (group) setSelected(group.studentIds); setLoading(true); setError(""); }} options={[{ value: "", label: "手动选择成员" }, ...savedGroups.map((group) => ({ value: String(group.id), label: `${group.name}（${group.studentIds.length} 人）` }))]} /></div>}
           <div className="selection-actions"><span>已选 {selected.length} 人</span><button className="text-link" onClick={() => { setSelected(visibleMembers.map((member) => member.id)); setLoading(true); setError(""); }}>选择当前年级全部</button></div>
           <div className="selection-list compact-selection">{visibleMembers.map((member) => <button key={member.id} className={selected.includes(member.id) ? "select-person selected" : "select-person"} onClick={() => toggleMember(member.id)}><span className="avatar">{member.name.slice(-1)}</span><span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"} · {memberGradeLabels[member.grade]}</small></span><i>{selected.includes(member.id) && <Check size={14} />}</i></button>)}</div>
         </>}
@@ -145,9 +146,9 @@ export function AvailabilityView({ members, savedGroups, initialGroupId, semeste
         {mode === "time" && <div className="filter-note"><Users size={18} /><span>将在当前筛选的 <strong>{visibleMembers.length}</strong> 位成员中查找。</span></div>}
 
         <div className="filter-fields availability-fields">
-          <label className="field"><span>星期</span><select value={weekday} onChange={(event) => { setWeekday(Number(event.target.value)); setLoading(true); setError(""); }}>{weekdays.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select></label>
-          <label className="field"><span>周次</span><select value={week} onChange={(event) => { setWeek(Number(event.target.value)); setLoading(true); setError(""); }}>{Array.from({ length: semester.weekCount }, (_, index) => index + 1).map((value) => <option key={value} value={value}>第 {value} 周</option>)}</select></label>
-          {mode !== "time" && <label className="field"><span>至少空闲</span><select value={minimumMinutes} onChange={(event) => { setMinimumMinutes(Number(event.target.value)); setLoading(true); setError(""); }}>{[45, 90, 135, 180].map((value) => <option key={value} value={value}>{value} 分钟</option>)}</select></label>}
+          <div className="field"><span>星期</span><SelectControl label="星期" value={String(weekday)} onChange={(value) => { setWeekday(Number(value)); setLoading(true); setError(""); }} options={weekdays.map((name, index) => ({ value: String(index + 1), label: name }))} /></div>
+          <div className="field"><span>周次</span><SelectControl label="周次" value={String(week)} onChange={(value) => { setWeek(Number(value)); setLoading(true); setError(""); }} options={Array.from({ length: semester.weekCount }, (_, index) => ({ value: String(index + 1), label: `第 ${index + 1} 周` }))} /></div>
+          {mode !== "time" && <div className="field"><span>至少空闲</span><SelectControl label="至少空闲" value={String(minimumMinutes)} onChange={(value) => { setMinimumMinutes(Number(value)); setLoading(true); setError(""); }} options={[45, 90, 135, 180].map((value) => ({ value: String(value), label: `${value} 分钟` }))} /></div>}
           {mode === "time" && <>
             <label className="field"><span>开始时间</span><input type="time" disabled={allDay} value={startTime} onChange={(event) => { setStartTime(event.target.value); setLoading(true); setError(""); }} /></label>
             <label className="field"><span>结束时间</span><input type="time" disabled={allDay} value={endTime} onChange={(event) => { setEndTime(event.target.value); setLoading(true); setError(""); }} /></label>

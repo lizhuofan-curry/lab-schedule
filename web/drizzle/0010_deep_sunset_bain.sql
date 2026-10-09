@@ -1,0 +1,3 @@
+ALTER TABLE "task_files" ADD COLUMN "deleting_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "file_unbound_creator_created_idx" ON "task_files" USING btree ("creator_id","created_at" DESC NULLS LAST,"id") WHERE "task_files"."task_id" is null;--> statement-breakpoint
+ALTER TABLE "task_files" ADD CONSTRAINT "file_delete_unbound_check" CHECK ("task_files"."deleting_at" is null or "task_files"."task_id" is null);

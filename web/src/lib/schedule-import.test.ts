@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCsv, parseWeeks, recordsFromPastedText, recordsFromRows, summarizeImportDiff, validateImportRecords } from "./schedule-import.ts";
 
+test("ExcelJS安全依赖更新后，含扩展条件格式的中文课表仍能写入和读取", async () => {
+  const { default: ExcelJS } = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("课表");
+  sheet.addRows([["课程名称", "开始节次"], ["机器学习", 1], ["计算机网络", 3]]);
+  // Extended data-bar formatting exercises ExcelJS's CommonJS uuid.v4 path.
+  sheet.addConditionalFormatting({ ref: "B2:B3", rules: [{ type: "dataBar", priority: 1, gradient: false, cfvo: [{ type: "min" }, { type: "max" }] }] });
+  const bytes = await workbook.xlsx.writeBuffer();
+  const restored = new ExcelJS.Workbook();
+  await restored.xlsx.load(bytes);
+  assert.equal(restored.getWorksheet("课表")?.getCell("A2").value, "机器学习");
+  assert.equal(restored.getWorksheet("课表")?.getCell("B3").value, 3);
+});
+
 test("周次支持范围、单双周与离散周", () => {
   assert.deepEqual(parseWeeks("1-6单, 8, 10-12双", 18), [1, 3, 5, 8, 10, 12]);
   assert.deepEqual(parseWeeks("1-18周(单)", 18), [1, 3, 5, 7, 9, 11, 13, 15, 17]);

@@ -9,6 +9,7 @@ import { WeekSwitcher } from "@/components/week-switcher";
 import type { ScheduleMember } from "@/lib/schedule-service";
 import type { ScheduleCourse, SchedulePeriod, ScheduleSemester } from "@/lib/schedule-types";
 import { memberGradeLabels, type MemberGrade } from "@/lib/member-grade";
+import { MemberWorkView } from "./member-work-view";
 
 const avatarColors = ["#316B5B", "#C96946", "#4D6F95", "#8B6A9A", "#A78038", "#4F7E7A"];
 
@@ -87,7 +88,7 @@ export function MembersView({ currentStudentId, members, semester, periods, init
 
   return (
     <>
-      <PageHeader eyebrow={guest ? "游客只读访问" : "实验室成员"} title="查看成员课表" description={guest ? "游客可以查看课表，完整学号和课程维护功能仅对注册成员开放。" : "所有登录成员都能查看课表；课程内容只有本人可以修改。"} actions={<WeekSwitcher semesterName={semester.name} week={week} weekCount={semester.weekCount} onChange={changeWeek} />} />
+      <PageHeader eyebrow={guest ? "游客只读访问" : "实验室成员"} title={guest ? "查看成员课表" : "成员课表与工作"} description={guest ? "游客可以查看课表，完整学号和课程维护功能仅对注册成员开放。" : "查看课表、正在做的事与任务；事项由本人填写和维护。"} actions={<WeekSwitcher semesterName={semester.name} week={week} weekCount={semester.weekCount} onChange={changeWeek} />} />
       <div className="members-page-layout">
         <aside className="panel member-browser">
           <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或学号" /></label>
@@ -111,6 +112,8 @@ export function MembersView({ currentStudentId, members, semester, periods, init
                 <span className="avatar large" style={{ background: memberColor(selectedMember.id) }}>{selectedMember.name.slice(-1)}</span>
                 <div><span className="eyebrow">成员课表 · {memberGradeLabels[selectedMember.grade]}</span><h2>{selectedMember.name}{selectedMember.id === currentStudentId ? "（我）" : ""}</h2><p>{selectedMember.studentNo ?? "学号待补"} · 第 {week} 周</p></div>
               </div>
+              {!guest && <MemberWorkView key={selectedMember.id} studentId={selectedMember.id} currentStudentId={currentStudentId} />}
+              <h3 className="member-course-heading">课表 · 第{week}周</h3>
               {error && <div className="form-error member-schedule-error" role="alert">{error}</div>}
               <div className={loading ? "schedule-loading" : ""} aria-busy={loading}>
                 <ScheduleBoard week={week} courses={courses} periods={periods} semesterStartDate={semester.startDate} onCourseClick={setDetailCourse} />

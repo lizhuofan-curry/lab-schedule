@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { SelectControl } from "@/components/form-controls";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent } from "react";
 import { AlertTriangle, ArrowLeft, Check, History, ImagePlus, Plus, ScanLine, Trash2 } from "lucide-react";
 import type { CourseInput } from "@/lib/course-schema";
@@ -218,9 +219,9 @@ export function ImageImportView() {
                 <label className={!draft.record["课程名称"].trim() || draft.reviewFields?.includes("课程名称") ? "needs-review" : ""}><span>课程名称 *</span><input value={draft.record["课程名称"]} onChange={(e) => updateRecord(index, "课程名称", e.target.value)} /></label>
                 <label className={draft.reviewFields?.includes("教师") ? "needs-review" : ""}><span>教师</span><input value={draft.record["教师"]} onChange={(e) => updateRecord(index, "教师", e.target.value)} /></label>
                 <label className={draft.reviewFields?.includes("地点") ? "needs-review" : ""}><span>地点</span><input value={draft.record["地点"]} onChange={(e) => updateRecord(index, "地点", e.target.value)} /></label>
-                <label className={!draft.record["星期"].trim() || draft.reviewFields?.includes("星期") ? "needs-review" : ""}><span>星期 *</span><select value={draft.record["星期"]} onChange={(e) => updateRecord(index, "星期", e.target.value)}><option value="">请选择</option>{["一","二","三","四","五","六","日"].map((day) => <option key={day} value={`周${day}`}>周{day}</option>)}</select></label>
-                <label className={!draft.record["开始节次"].trim() || draft.reviewFields?.includes("开始节次") ? "needs-review" : ""}><span>开始节次 *</span><select value={draft.record["开始节次"]} onChange={(e) => updateRecord(index, "开始节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
-                <label className={!draft.record["结束节次"].trim() || draft.reviewFields?.includes("结束节次") ? "needs-review" : ""}><span>结束节次 *</span><select value={draft.record["结束节次"]} onChange={(e) => updateRecord(index, "结束节次", e.target.value)}><option value="">请选择</option>{Array.from({ length: 13 }, (_, i) => i + 1).map((period) => <option key={period}>{period}</option>)}</select></label>
+                <div className={!draft.record["星期"].trim() || draft.reviewFields?.includes("星期") ? "field needs-review" : "field"}><span>星期 *</span><SelectControl label={`第${index + 1}条课程星期`} value={draft.record["星期"]} onChange={(value) => updateRecord(index, "星期", value)} options={[{ value: "", label: "请选择" }, ...["一","二","三","四","五","六","日"].map((day) => ({ value: `周${day}`, label: `周${day}` }))]} /></div>
+                <div className={!draft.record["开始节次"].trim() || draft.reviewFields?.includes("开始节次") ? "field needs-review" : "field"}><span>开始节次 *</span><SelectControl label={`第${index + 1}条课程开始节次`} value={draft.record["开始节次"]} onChange={(value) => updateRecord(index, "开始节次", value)} options={[{ value: "", label: "请选择" }, ...Array.from({ length: 13 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]} /></div>
+                <div className={!draft.record["结束节次"].trim() || draft.reviewFields?.includes("结束节次") ? "field needs-review" : "field"}><span>结束节次 *</span><SelectControl label={`第${index + 1}条课程结束节次`} value={draft.record["结束节次"]} onChange={(value) => updateRecord(index, "结束节次", value)} options={[{ value: "", label: "请选择" }, ...Array.from({ length: 13 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]} /></div>
                 <label className={!draft.record["周次"].trim() || draft.reviewFields?.includes("周次") ? "needs-review" : ""}><span>周次 *</span><input placeholder="例如 1-18 或 1-18单" value={draft.record["周次"]} onChange={(e) => updateRecord(index, "周次", e.target.value)} /></label>
                 <label><span>备注</span><input value={draft.record["备注"]} onChange={(e) => updateRecord(index, "备注", e.target.value)} /></label>
               </div>

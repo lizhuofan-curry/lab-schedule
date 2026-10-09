@@ -6,6 +6,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgTable,
   smallint,
   text,
@@ -217,9 +218,280 @@ export const courseSnapshots = pgTable("course_snapshots", {
   check("course_snapshots_weeks_not_empty", sql`cardinality(${table.weeks}) > 0`),
 ]);
 
+export const collabTasks = pgTable(
+  "collab_tasks",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    publisherId: bigint("publisher_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id, { onDelete: "restrict" }),
+    kind: text("kind").$type<"announcement" | "assigned">().notNull(),
+    delivery: text("delivery").$type<"shared" | "individual">().notNull(),
+    status: text("status")
+      .$type<"active" | "completed" | "cancelled">()
+      .default("active")
+      .notNull(),
+    currentRound: integer("current_round").default(1).notNull(),
+    revision: integer("revision").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("tasks_publisher_idx").on(t.publisherId),
+    index("tasks_status_updated_idx").on(t.status, t.updatedAt),
+    check("tasks_kind_check", sql`${t.kind} in ('announcement','assigned')`),
+    check(
+      "tasks_delivery_check",
+      sql`${t.delivery} in ('shared','individual')`,
+    ),
+    check(
+      "tasks_status_check",
+      sql`${t.status} in ('active','completed','cancelled')`,
+    ),
+    check(
+      "tasks_round_revision_positive",
+      sql`${t.currentRound} > 0 and ${t.revision} > 0`,
+    ),
+  ],
+);
+export const taskRounds = pgTable(
+  "task_rounds",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    taskId: bigint("task_id", { mode: "number" })
+      .notNull()
+      .references(() => collabTasks.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    deadline: timestamp("deadline", { withTimezone: true }),
+    capacity: integer("capacity"),
+    claimsOpen: boolean("claims_open").default(false).notNull(),
+    directIds: jsonb("direct_ids").$type<number[]>().default([]).notNull(),
+    groupIds: jsonb("group_ids").$type<number[]>().default([]).notNull(),
+    groupNames: jsonb("group_names")
+      .$type<Record<string, string>>()
+      .default({})
+      .notNull(),
+    fileIds: jsonb("file_ids").$type<string[]>().default([]).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    outcome: text("outcome"),
+  },
+  (t) => [
+    uniqueIndex("round_task_number_uidx").on(t.taskId, t.number),
+    check(
+      "round_values_check",
+      sql`${t.number} > 0 and (${t.capacity} is null or ${t.capacity} > 0) and length(trim(${t.title})) > 0 and length(trim(${t.description})) > 0`,
+    ),
+    check(
+      "round_outcome_check",
+      sql`${t.outcome} is null or ${t.outcome} in ('completed','cancelled')`,
+    ),
+  ],
+);
+export const taskParticipants = pgTable(
+  "task_participants",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    roundId: bigint("round_id", { mode: "number" })
+      .notNull()
+      .references(() => taskRounds.id, { onDelete: "cascade" }),
+    studentId: bigint("student_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    active: boolean("active").default(true).notNull(),
+    generation: integer("generation").default(1).notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("participant_round_student_uidx").on(t.roundId, t.studentId),
+    index("participant_student_idx").on(t.studentId),
+    check("participant_generation_positive", sql`${t.generation} > 0`),
+  ],
+);
+export const taskSubmissions = pgTable(
+  "task_submissions",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    roundId: bigint("round_id", { mode: "number" })
+      .notNull()
+      .references(() => taskRounds.id, { onDelete: "cascade" }),
+    subjectKey: text("subject_key").notNull(),
+    version: integer("version").notNull(),
+    requestKey: text("request_key").notNull(),
+    authorId: bigint("author_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id, { onDelete: "restrict" }),
+    authorName: text("author_name").notNull(),
+    body: text("body").notNull(),
+    links: jsonb("links").$type<string[]>().default([]).notNull(),
+    fileIds: jsonb("file_ids").$type<string[]>().default([]).notNull(),
+    status: text("status")
+      .$type<"pending" | "returned" | "approved">()
+      .default("pending")
+      .notNull(),
+    feedback: text("feedback"),
+    reviewerId: bigint("reviewer_id", { mode: "number" }).references(
+      () => students.id,
+      { onDelete: "restrict" },
+    ),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("submission_round_subject_version_uidx").on(
+      t.roundId,
+      t.subjectKey,
+      t.version,
+    ),
+    uniqueIndex("submission_request_uidx").on(
+      t.roundId,
+      t.authorId,
+      t.requestKey,
+    ),
+    index("submission_author_idx").on(t.authorId),
+    index("submission_reviewer_idx").on(t.reviewerId),
+    check("submission_version_positive", sql`${t.version} > 0`),
+    check(
+      "submission_status_check",
+      sql`${t.status} in ('pending','returned','approved')`,
+    ),
+  ],
+);
+export const taskEvents = pgTable(
+  "task_events",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    taskId: bigint("task_id", { mode: "number" })
+      .notNull()
+      .references(() => collabTasks.id, { onDelete: "cascade" }),
+    roundId: bigint("round_id", { mode: "number" })
+      .notNull()
+      .references(() => taskRounds.id, { onDelete: "cascade" }),
+    actorId: bigint("actor_id", { mode: "number" }).references(
+      () => students.id,
+      { onDelete: "restrict" },
+    ),
+    action: text("action").notNull(),
+    detail: jsonb("detail")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("event_task_created_idx").on(t.taskId, t.createdAt),
+    index("event_round_idx").on(t.roundId),
+    index("event_actor_idx").on(t.actorId),
+  ],
+);
+export const taskFiles = pgTable(
+  "task_files",
+  {
+    id: text("id").primaryKey(),
+    creatorId: bigint("creator_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id, { onDelete: "restrict" }),
+    taskId: bigint("task_id", { mode: "number" }).references(
+      () => collabTasks.id,
+      { onDelete: "restrict" },
+    ),
+    name: text("name").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256").notNull(),
+    deletingAt: timestamp("deleting_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("file_creator_idx").on(t.creatorId),
+    index("file_task_idx").on(t.taskId),
+    index("file_unbound_creator_created_idx").on(t.creatorId, t.createdAt.desc(), t.id).where(sql`${t.taskId} is null`),
+    check("file_delete_unbound_check", sql`${t.deletingAt} is null or ${t.taskId} is null`),
+    check("file_size_check", sql`${t.size} > 0 and ${t.size} <= 10485760`),
+  ],
+);
+export const taskNotifications = pgTable(
+  "task_notifications",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    recipientId: bigint("recipient_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id, { onDelete: "restrict" }),
+    taskId: bigint("task_id", { mode: "number" })
+      .notNull()
+      .references(() => collabTasks.id, { onDelete: "cascade" }),
+    roundId: bigint("round_id", { mode: "number" })
+      .notNull()
+      .references(() => taskRounds.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    assignment: boolean("assignment").default(false).notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("notification_recipient_created_idx").on(t.recipientId, t.createdAt),
+    index("notification_unread_idx")
+      .on(t.recipientId)
+      .where(sql`${t.readAt} is null`),
+    index("notification_task_idx").on(t.taskId),
+    index("notification_round_idx").on(t.roundId),
+  ],
+);
+
+export const memberWorkRecords = pgTable("member_work_records", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  studentId: bigint("student_id", { mode: "number" }).notNull().references(() => students.id, { onDelete: "restrict" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  status: text("status").$type<"active" | "completed" | "paused">().default("active").notNull(),
+  revision: integer("revision").default(1).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true, precision: 3 }),
+  createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+}, (t) => [
+  index("work_student_updated_idx").on(t.studentId, t.updatedAt.desc(), t.id.desc()),
+  index("work_student_completed_idx").on(t.studentId, t.completedAt),
+  check("work_content_check", sql`char_length(trim(${t.title})) between 1 and 120 and char_length(trim(${t.description})) between 1 and 20000`),
+  check("work_status_check", sql`${t.status} in ('active','completed','paused') and ((${t.status} = 'completed') = (${t.completedAt} is not null))`),
+  check("work_revision_positive", sql`${t.revision} > 0`),
+]);
+
 export const studentRelations = relations(students, ({ one, many }) => ({
   user: one(users, { fields: [students.userId], references: [users.id] }),
   courses: many(courses),
+  workRecords: many(memberWorkRecords),
   scheduleVersions: many(scheduleVersions),
   groupMemberships: many(groupMembers),
   createdGroups: many(groups),

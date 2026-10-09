@@ -3,6 +3,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+FROM dependencies AS runtime-dependencies
+# The image also runs database migrations, so drizzle-kit is a runtime dependency.
+# Exclude lint/test tools (including their unpatched glob dependency) from production.
+RUN npm prune --omit=dev
+
 FROM node:24-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -17,7 +22,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
-COPY --from=dependencies /app/node_modules ./node_modules
+RUN mkdir -p /app/data/task-files && chown -R nextjs:nodejs /app/data
+COPY --from=runtime-dependencies /app/node_modules ./node_modules
 COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/drizzle.config.ts ./

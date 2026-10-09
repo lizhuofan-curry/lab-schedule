@@ -1,5 +1,33 @@
 # API 设计（MVP-B / v1）
 
+## v2.1成员工作接口契约
+
+GET `/api/students/:id/work?scope=recent|all&cursor=...`：仅注册启用成员；recent返回该成员的近期个人records，all仅允许本人完整管理。records按(updatedAt,id)游标，每页50项返回nextCursor、scope和asOf。cursor为长度受限的base64url编码时间/正整数ID对象，非法scope/游标或未知查询字段拒绝422；不能以参数绕过他人旧记录边界。GET `/api/students/:id/work/tasks?cursor=...`：仅注册启用成员，返回当前承担的进行中及近7天整体完成任务、本人提交验收状态及nextCursor，按任务(updatedAt,id)分页。
+
+POST `/api/my/work`：严格Zod对象{title,description,status}，status为active/completed/paused，默认active；所有者取会话，不接收studentId或完成时间。PATCH `/api/my/work/:id`：{title,description,status,expectedRevision}；DELETE同路径：{expectedRevision}。只操作本人记录，Origin和256KiB体积限制复用现有守卫；修改/删除校验修订。GET `/api/my/work/:id`：仅本人读取，供编辑旧记录。读取禁缓存，游客403、匿名401；WORK_NOT_FOUND/STUDENT_NOT_FOUND为404、FORBIDDEN_OWNER为403、STALE_REVISION为409、输入错误为422，提示刷新或修改输入。
+
+## v2任务接口契约
+
+GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/tasks/:id：仅成员，返回轮次、参与人、成果、业务历史。POST /api/tasks：成员发布，身份来自会话。POST /api/tasks/:id：统一Zod命令，action为edit/targets/claim/close/cancel/reopen/submit/review；管理命令校验发布者，提交校验执行成员，逐人成果只能本人提交。
+
+2026-10-09界面增量：游客列表白名单明确为id/title/publisher/deadline/status/kind；仅新增kind分类标识（announcement或assigned），供公开/指定分区及历史类型标签，仍无详情、执行人或内部身份字段。列表API保留各状态数据，页面默认仅展示active，上下分区；已完成及已撤销单独筛选，不删除历史。
+
+edit/targets/close/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。类型/交付模式不可编辑，打回原因必填。
+
+POST /api/task-files：成员multipart单文件上传，单文件10MiB、允许扩展名及内容签名验证。GET /api/task-files/:id：成员下载已关联文件；未关联仅上传者可访问，禁止游客，下载禁缓存且nosniff。POST写入校验Origin，JSON请求限256KiB，multipart限11MiB。附件不提供公开URL。
+
+GET /api/task-files/:id?preview=1：复用同一成员鉴权、清理中拒绝和SHA-256/大小校验，固定安全MIME及inline响应；仅PDF、PNG/JPEG、TXT和MD/Markdown。文本/Markdown以text/plain返回，由安全组件渲染，不作为HTML响应。文本预览上限256KiB，超过或不支持格式返回FILE_PREVIEW_TOO_LARGE/FILE_PREVIEW_UNSUPPORTED（422）并提示下载；不改变10MiB上传限制。保持private,no-store、nosniff及沙箱CSP，下载不带preview仍为attachment。客户端只对任务资料打开预览，成果保持下载；游客403、匿名401、未关联他人/清理中文件404。
+
+PDF站内预览使用本地PDF.js逐页绘制，支持上一页/下一页，不执行文档脚本；Worker随前端构建打包。GET /api/pdf-assets/:kind/:name仅提供pdfjs-dist包内的cmaps、standard_fonts及wasm静态依赖，目录、文件名和扩展名均为白名单；未知目录/扩展名/不存在文件404。此接口没有附件或用户数据，不提供任意路径读取；构建须包含对应依赖资源。任务PDF内容仍必须经过上述私有附件鉴权读取，不能借此静态接口访问。
+
+GET /api/task-files：仅返回本人最近50个未关联附件（files及hasMore）；删除中附件返回deleting=true供重试，无其他成员数据。DELETE /api/task-files/:id：严格Zod对象{confirm:true}并校验Origin，仅上传者能主动清理未关联附件；已绑定返回FILE_IN_USE（409），删除中禁止绑定，文件I/O失败返回FILE_DELETE_FAILED（503）并保留可重试状态和额度。游客403、匿名401，读取禁缓存。清理一批后刷新可继续处理更早附件；取消表单后在任何任务附件选择器仍可清理遗留文件。
+
+GET /api/notifications：本人消息与未读有效指派，每页最多200条；可选before为正整数消息ID，nextCursor指向下一页，unread统计全部未读。历史消息可翻页查询，指派弹窗独立于分页。POST /api/notifications：Zod校验本人消息ID集合标已读，每次最多200条，不能标他人。GET /api/task-options：注册启用成员与小组，供发布选择。
+
+task-options的小组包含可执行members及excluded（成员id、姓名、未注册/已停用原因），选择器合并去重后展示实际人数和排除提示。发布返回memberCount和excluded，发布/调整事件记录当次排除快照；进行中指定任务详情targetExclusions返回最新小组排除名单，避免表单打开后成员变化导致静默排除。已结束轮次只读历史快照。
+
+错误：INVALID_TASK/INVALID_COMMAND/INVALID_FILE（422）、FORBIDDEN_OWNER/FORBIDDEN_EXECUTOR（403）、TASK_NOT_FOUND/FILE_NOT_FOUND（404）、STALE_REVISION/STALE_SUBMISSION/TASK_CLOSED/CLAIM_FULL（409）、PAYLOAD_TOO_LARGE（413）、STORAGE_FULL（507）。未知错误不返回内部数据库连接或文件路径。
+
 统一返回 JSON。未登录返回 `401`，无权限返回 `403`，资源不存在返回 `404`，业务校验失败返回 `422`，并包含面向用户的中文 `message`。
 
 ## 1. 身份

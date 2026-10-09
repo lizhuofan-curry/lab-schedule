@@ -6,4 +6,8 @@ _next_*
 .env
 .env.local
 npm-debug.log*
+data
+test-results
+playwright-report
+test
 *.png

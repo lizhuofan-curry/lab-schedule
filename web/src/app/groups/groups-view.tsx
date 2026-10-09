@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRightLeft, CalendarRange, Crown, Pencil, Plus, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ConfirmationDialog, SelectControl } from "@/components/form-controls";
 import type { GroupDirectoryItem } from "@/lib/group-service";
 import type { ScheduleMember } from "@/lib/schedule-service";
 
@@ -27,6 +28,7 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
   const [candidateByGroup, setCandidateByGroup] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState<{ title: string; description: string; label: string; action: () => Promise<unknown> } | null>(null);
 
   const groupCountForMe = useMemo(() => currentStudentId ? groups.filter((group) => group.members.some((member) => member.studentId === currentStudentId)).length : 0, [currentStudentId, groups]);
 
@@ -51,6 +53,7 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
   }
 
   async function create() {
+    if (busy) return;
     if (!newName.trim()) return setError("请输入小组名称。");
     const created = await perform(() => requestJson("/api/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: newName }) }));
     if (created) setNewName("");
@@ -60,7 +63,7 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
     <section className="group-summary-grid">
       <article className="panel group-summary"><UsersRound size={22} /><div><strong>{groups.length}</strong><span>个小组</span></div></article>
       <article className="panel group-summary"><Crown size={22} /><div><strong>{guest ? "—" : groupCountForMe}</strong><span>{guest ? "游客只读" : "我加入的小组"}</span></div></article>
-      {!guest && <article className="panel group-create"><div><span className="eyebrow">创建新小组</span><p>创建后你将成为组长，可以改名、维护成员或转让组长。</p></div><div><input value={newName} maxLength={40} placeholder="例如：视觉重建组" onChange={(event) => setNewName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void create(); }} /><button className="button primary" disabled={busy} onClick={() => void create()}><Plus size={17} /> 创建</button></div></article>}
+      {!guest && <article className="panel group-create"><div><span className="eyebrow">创建新小组</span><p>创建后你将成为组长，可以改名、维护成员或转让组长。</p></div><div><input aria-label="小组名称" value={newName} maxLength={40} disabled={busy} placeholder="例如：视觉重建组" onChange={(event) => setNewName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void create(); }} /><button className="button primary" disabled={busy} onClick={() => void create()}><Plus size={17} /> 创建</button></div></article>}
     </section>
 
     {error && <div className="form-error" role="alert">{error}</div>}
@@ -80,15 +83,13 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
             {group.members.map((member) => <div className="group-member" key={member.studentId}>
               <span className="avatar">{member.name.slice(-1)}</span>
               <span><strong>{member.name}</strong><small>{member.studentNo ?? "学号待补"}</small></span>
-              {member.role === "leader" ? <i className="leader-chip"><Crown size={13} /> 组长</i> : group.canManage ? <span className="group-member-actions"><button disabled={busy} title="转让组长" onClick={() => { if (window.confirm(`确认把“${group.name}”的组长转让给 ${member.name}？`)) void perform(() => requestJson(`/api/groups/${group.id}/leader`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ studentId: member.studentId }) })); }}><ArrowRightLeft size={15} /></button><button disabled={busy} title="移出小组" onClick={() => void perform(() => requestJson(`/api/groups/${group.id}/members/${member.studentId}`, { method: "DELETE" }))}><X size={15} /></button></span> : null}
+              {member.role === "leader" ? <i className="leader-chip"><Crown size={13} /> 组长</i> : group.canManage ? <span className="group-member-actions"><button disabled={busy} title="转让组长" onClick={() => { setError(""); setConfirmation({ title: "转让组长", description: `确认把“${group.name}”的组长转让给 ${member.name}？转让后你将不能管理该小组。`, label: "确认转让", action: () => requestJson(`/api/groups/${group.id}/leader`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ studentId: member.studentId }) }) }); }}><ArrowRightLeft size={15} /></button><button disabled={busy} title="移出小组" onClick={() => void perform(() => requestJson(`/api/groups/${group.id}/members/${member.studentId}`, { method: "DELETE" }))}><X size={15} /></button></span> : null}
             </div>)}
           </div>
 
           {group.canManage && <div className="group-manage-row">
-            <select value={candidateByGroup[group.id] ?? ""} onChange={(event) => setCandidateByGroup((current) => ({ ...current, [group.id]: Number(event.target.value) }))}>
-              <option value="">选择要添加的成员</option>
-              {candidateMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.studentNo}</option>)}
-            </select>
+            <SelectControl label={`为${group.name}添加成员`} disabled={busy} value={candidateByGroup[group.id] ? String(candidateByGroup[group.id]) : ""} onChange={(value) => setCandidateByGroup((current) => ({ ...current, [group.id]: Number(value) }))}
+              options={[{ value: "", label: "选择要添加的成员" }, ...candidateMembers.map((member) => ({ value: String(member.id), label: `${member.name} · ${member.studentNo ?? "学号待补"}` }))]} />
             <button className="button secondary small" disabled={busy || !candidateByGroup[group.id]} onClick={() => void perform(() => requestJson(`/api/groups/${group.id}/members`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ studentId: candidateByGroup[group.id] }) }))}><UserPlus size={16} /> 添加</button>
           </div>}
 
@@ -97,11 +98,12 @@ export function GroupsView({ initialGroups, members, guest, currentStudentId }: 
               <Link className="text-link" href={`/groups/${group.id}`}><CalendarRange size={15} /> 查看叠加课表</Link>
               <Link className="text-link" href={`/availability?group=${group.id}`}>查询共同空闲</Link>
             </div>
-            {group.canManage && <button className="danger-link" disabled={busy} onClick={() => { if (window.confirm(`确认解散“${group.name}”？此操作不会删除成员课表。`)) void perform(() => requestJson(`/api/groups/${group.id}`, { method: "DELETE" })); }}><Trash2 size={15} /> 解散小组</button>}
+            {group.canManage && <button className="danger-link" disabled={busy} onClick={() => { setError(""); setConfirmation({ title: "解散小组", description: `确认解散“${group.name}”？此操作不会删除成员课表。`, label: "确认解散", action: () => requestJson(`/api/groups/${group.id}`, { method: "DELETE" }) }); }}><Trash2 size={15} /> 解散小组</button>}
           </footer>
         </article>;
       })}
     </section>}
+    {confirmation && <ConfirmationDialog title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.label}
+      busy={busy} error={error} onClose={() => setConfirmation(null)} onConfirm={() => void perform(confirmation.action).then((success) => { if (success) setConfirmation(null); })} />}
   </div>;
 }
-

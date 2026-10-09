@@ -53,7 +53,7 @@ export default function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-story">
-        <Link href="/" className="auth-brand"><span className="brand-mark"><BciLogo /></span><strong>同频课表</strong></Link>
+        <Link href="/" className="auth-brand"><span className="brand-mark"><BciLogo /></span><strong>HenuBCI</strong></Link>
         <div className="story-copy">
           <span className="eyebrow light">BCI实验室时间协作</span>
           <h1>不再在群里<br />反复问“谁有空”。</h1>

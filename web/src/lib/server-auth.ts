@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { students } from "@/db/schema";
@@ -21,7 +21,7 @@ export async function getCurrentMember(requestHeaders?: Headers): Promise<Curren
     studentId: students.id,
     studentNo: students.studentNo,
     name: students.name,
-  }).from(students).where(eq(students.userId, session.user.id)).limit(1);
+  }).from(students).where(and(eq(students.userId, session.user.id), eq(students.enabled, true))).limit(1);
 
   if (!student?.studentNo) return null;
   return {

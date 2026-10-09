@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, Clock3, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, UsersRound, X } from "lucide-react";
+import { CalendarDays, Clock3, ClipboardList, LayoutDashboard, LogOut, Menu, UserRoundCheck, Users, UsersRound, X } from "lucide-react";
 import { useState } from "react";
 import { BciLogo } from "@/components/bci-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { signOut } from "@/lib/auth-client";
+import { TaskNotifications } from "@/components/task-notifications";
 
 const navigation = [
   { href: "/dashboard", label: "课表总览", icon: LayoutDashboard },
@@ -14,6 +15,7 @@ const navigation = [
   { href: "/availability", label: "找共同空闲", icon: Clock3 },
   { href: "/members", label: "实验室成员", icon: Users },
   { href: "/groups", label: "项目小组", icon: UsersRound },
+  { href: "/tasks", label: "任务协作", icon: ClipboardList },
   { href: "/registration", label: "注册情况", icon: UserRoundCheck },
 ];
 
@@ -34,8 +36,8 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
   return (
     <div className="app-frame">
       <header className="mobile-header">
-        <Link href="/dashboard" className="brand-mark" aria-label="同频课表首页"><BciLogo /></Link>
-        <span className="mobile-brand-title">同频课表</span>
+        <Link href="/dashboard" className="brand-mark" aria-label="HenuBCI首页"><BciLogo /></Link>
+        <span className="mobile-brand-title">HenuBCI</span>
         <button className="icon-button" onClick={() => setOpen((value) => !value)} aria-label={open ? "关闭账户菜单" : "打开账户菜单"}>
           {open ? <X size={21} /> : <Menu size={21} />}
         </button>
@@ -45,14 +47,14 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
         <div className="brand">
           <div className="brand-mark"><BciLogo /></div>
           <div>
-            <strong>同频课表</strong>
+            <strong>HenuBCI</strong>
             <small>BCI实验室时间协作</small>
           </div>
         </div>
 
         <nav className="nav-list" aria-label="主要导航">
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
+            const active = pathname === href || (href === "/tasks" && pathname.startsWith("/tasks/"));
             return (
               <Link key={href} href={href} className={active ? "nav-item active" : "nav-item"} onClick={() => setOpen(false)}>
                 <Icon size={19} strokeWidth={1.8} />
@@ -62,6 +64,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
           })}
         </nav>
 
+        {!guest && <TaskNotifications />}
         <ThemeSwitcher />
         <div className="sidebar-footer">
           <div className="current-user">
@@ -76,7 +79,7 @@ export function AppShell({ children, currentUser = { name: "李卓凡", studentN
       <main className="main-content">{children}</main>
       <nav className={`mobile-bottom-nav ${guest ? "guest-nav" : ""}`} aria-label="手机端主要导航">
         {mobileNavigation.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = pathname === href || (href === "/tasks" && pathname.startsWith("/tasks/"));
           return (
             <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
               <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />

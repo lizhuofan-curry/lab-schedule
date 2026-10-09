@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { CourseDialog } from "@/components/course-dialog";
+import { ConfirmationDialog } from "@/components/form-controls";
 import { ScheduleBoard } from "@/components/schedule-board";
 import { WeekSwitcher } from "@/components/week-switcher";
 import type { CourseInput } from "@/lib/course-schema";
@@ -22,6 +23,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses, studentNo 
   const [editing, setEditing] = useState<ScheduleCourse | null>(null);
   const [slot, setSlot] = useState<{ weekday: number; period: number } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -75,7 +77,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses, studentNo 
   }
 
   async function deleteCourse() {
-    if (!editing || !window.confirm(`确定删除“${editing.name}”吗？`)) return;
+    if (!editing) return;
     setSaving(true);
     setError("");
     try {
@@ -84,6 +86,7 @@ export function MyScheduleEditor({ semester, periods, initialCourses, studentNo 
       if (!response.ok) throw new Error(body?.message || "课程删除失败，请稍后重试。");
       setCourseItems((items) => items.filter((item) => item.id !== editing.id));
       setDialogOpen(false);
+      setConfirmDelete(false);
       showNotice("课程已删除");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "课程删除失败，请稍后重试。");
@@ -104,7 +107,9 @@ export function MyScheduleEditor({ semester, periods, initialCourses, studentNo 
         </div>
         <ScheduleBoard courses={courseItems} week={week} periods={periods} semesterStartDate={semester.startDate} editable onCellClick={openNew} onCourseClick={openEdit} />
       </section>
-      <CourseDialog open={dialogOpen} course={editing} initialSlot={slot} semesterId={semester.id} weekCount={semester.weekCount} periods={periods} saving={saving} error={error} onClose={closeDialog} onSave={saveCourse} onDelete={editing ? deleteCourse : undefined} />
+      <CourseDialog open={dialogOpen} course={editing} initialSlot={slot} semesterId={semester.id} weekCount={semester.weekCount} periods={periods} saving={saving} error={error} onClose={closeDialog} onSave={saveCourse} onDelete={editing ? () => { setError(""); setConfirmDelete(true); } : undefined} />
+      {confirmDelete && editing && <ConfirmationDialog title="删除课程" description={`确认删除“${editing.name}”？删除后该课程将从你的课表中移除。`}
+        confirmLabel="确认删除" busy={saving} error={error} onClose={() => { setConfirmDelete(false); setError(""); }} onConfirm={() => void deleteCourse()} />}
     </>
   );
 }

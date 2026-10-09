@@ -1,5 +1,25 @@
 # 数据库设计（MVP-B）
 
+## v2.1成员工作记录增量契约
+
+`member_work_records`：bigint identity主键，student_id非空外键students（restrict），title/description非空text，status为active/completed/paused，revision正整数默认1，completed_at可空timestamptz(3)，created_at/updated_at非空timestamptz(3)。数据库校验标题去空格后1～120字、说明1～20000字及completed状态当且仅当completed_at非空。索引(student_id,updated_at desc,id desc)覆盖所有者和分页；(student_id,completed_at)覆盖近期完成筛选。原有数据不重置，新表随数据库备份与恢复。
+
+服务端会话确定所有者，创建默认active；转为completed记录完成时间，完成状态内改字不重置，恢复active/paused清除当前完成时间。修改/删除携带expectedRevision，行锁和所有权检查拒绝过期及越权。删除实际删除个人记录，无回收站，不复制个人文字到审计快照。对他人读取仅active/paused及最近7×24小时完成的记录，本人完整管理另行授权；按(updated_at,id)游标分页。
+
+成员任务摘要读取当前轮次及有效参与人，不复制到个人记录；整体完成使用task_rounds.ended_at和原任务规则。查询先在同一短事务锁下同步名单，个人验收状态只作附加展示。
+
+## v2任务增量契约（2026-10-08）
+
+新增collab_tasks（发布者、固定类型/交付模式、整体状态、当前轮次、修订号）、task_rounds（各轮要求、截止时间、人数上限、领取开关、个人/小组目标快照及要求附件）、task_participants（每轮成员、名称快照、活跃状态、重新加入次数）、task_submissions（共同/个人交付键、递增版本、内容、附件、反馈及验收人）、task_events（只追加业务历史）、task_files（私有存储元数据、上传人、大小、SHA-256及关联任务）、task_notifications（收件人、任务/轮次、指派标记、已读状态）。
+
+主键使用identity bigint，附件使用UUID文本标识。JSONB保存明确的ID数组/快照，目标保留历史ID而不级联丢失；发布时校验引用，小组解散保留名称快照。轮次(task_id,number)、参与人(round_id,student_id)、成果(round_id,subject_key,version)唯一，所有外键建立查询索引，状态和正数等CHECK约束。
+
+任务和小组写操作先取得同一事务级advisory lock，保证跨小组名单变化、领取和验收一致；小规模实验室内短事务串行，文件I/O和外部请求不进入事务。要求和目标变更校验revision，验收和重提校验最新成果版本。移出成果保留，重新加入增加generation，避免继承移出前个人通过结果。完成/撤销轮次固定，重开新轮读取当前小组。
+
+附件先私有落盘，再短事务校验额度并写元数据；只允许绑定本人未使用附件或本任务已关联附件。失败不产生任务或成果版本。配额按元数据大小合计；拒绝超额新上传，不删除历史。数据库和文件均纳入备份。
+
+未关联附件由上传者主动清理，不自动到期。新增task_files.deleting_at可空timestamptz和CHECK（删除中必须task_id为空），以及(creator_id,created_at desc,id)的task_id为空部分索引。清理与绑定共用任务锁：短事务标记删除中→事务外删除私有文件（不存在视为已删除）→短事务删除元数据后才释放额度。失败保留标记和额度，供本人重试；删除中不得下载或绑定。已关联附件永远不能通过此接口删除，即使已从当前表单移除也保留历史。备份校验只要求非删除中元数据对应文件完整；恢复保留删除中状态，继续由本人清理。
+
 数据库：PostgreSQL。所有时间戳使用 `timestamptz`；单库业务表使用 `bigint generated always as identity` 主键，认证系统保留其文本 ID；周次使用 `smallint[]`，不保存“1-16周”等展示文本。
 
 ## 1. 关系概览

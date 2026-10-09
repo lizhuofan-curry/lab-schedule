@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { SelectControl } from "@/components/form-controls";
 import type { CourseInput } from "@/lib/course-schema";
 import { buildWeeks, type ScheduleCourse, type SchedulePeriod, weekdays } from "@/lib/schedule-types";
 
@@ -56,10 +57,10 @@ function CourseDialogForm({ course, initialSlot, semesterId, weekCount, periods,
         </div>
         <div className="form-grid">
           <label className="field full"><span>课程名称 *</span><input required maxLength={100} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="例如：机器学习" autoFocus /></label>
-          <label className="field"><span>星期 *</span><select value={draft.weekday} onChange={(event) => setDraft({ ...draft, weekday: Number(event.target.value) })}>{weekdays.map((day, index) => <option key={day} value={index + 1}>{day}</option>)}</select></label>
-          <label className="field"><span>周次类型</span><select value={draft.weekType} onChange={(event) => setDraft({ ...draft, weekType: event.target.value as WeekType })}><option value="all">每周</option><option value="odd">单周</option><option value="even">双周</option></select></label>
-          <label className="field"><span>开始节次 *</span><select value={draft.startPeriod} onChange={(event) => setDraft({ ...draft, startPeriod: Number(event.target.value) })}>{periods.map((period) => <option key={period.periodNo} value={period.periodNo}>{period.name}（{period.startTime.slice(0, 5)}）</option>)}</select></label>
-          <label className="field"><span>结束节次 *</span><select value={draft.endPeriod} onChange={(event) => setDraft({ ...draft, endPeriod: Number(event.target.value) })}>{periods.map((period) => <option key={period.periodNo} value={period.periodNo}>{period.name}（{period.endTime.slice(0, 5)}结束）</option>)}</select></label>
+          <div className="field"><span>星期 *</span><SelectControl label="星期" value={String(draft.weekday)} disabled={saving} onChange={(value) => setDraft({ ...draft, weekday: Number(value) })} options={weekdays.map((day, index) => ({ value: String(index + 1), label: day }))} /></div>
+          <div className="field"><span>周次类型</span><SelectControl label="周次类型" value={draft.weekType} disabled={saving} onChange={(value) => setDraft({ ...draft, weekType: value as WeekType })} options={[{ value: "all", label: "每周" }, { value: "odd", label: "单周" }, { value: "even", label: "双周" }]} /></div>
+          <div className="field"><span>开始节次 *</span><SelectControl label="开始节次" value={String(draft.startPeriod)} disabled={saving} onChange={(value) => setDraft({ ...draft, startPeriod: Number(value) })} options={periods.map((period) => ({ value: String(period.periodNo), label: `${period.name}（${period.startTime.slice(0, 5)}）` }))} /></div>
+          <div className="field"><span>结束节次 *</span><SelectControl label="结束节次" value={String(draft.endPeriod)} disabled={saving} onChange={(value) => setDraft({ ...draft, endPeriod: Number(value) })} options={periods.map((period) => ({ value: String(period.periodNo), label: `${period.name}（${period.endTime.slice(0, 5)}结束）` }))} /></div>
           <label className="field"><span>开始周 *</span><input type="number" min="1" max={weekCount} value={draft.startWeek} onChange={(event) => setDraft({ ...draft, startWeek: Number(event.target.value) })} /></label>
           <label className="field"><span>结束周 *</span><input type="number" min="1" max={weekCount} value={draft.endWeek} onChange={(event) => setDraft({ ...draft, endWeek: Number(event.target.value) })} /></label>
           <label className="field"><span>任课教师</span><input maxLength={80} value={draft.teacher ?? ""} onChange={(event) => setDraft({ ...draft, teacher: event.target.value })} placeholder="选填" /></label>

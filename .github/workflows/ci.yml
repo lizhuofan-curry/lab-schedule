@@ -40,6 +40,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Run unit tests
         run: npm test
 
@@ -87,4 +90,6 @@ jobs:
         run: cp .env.example .env
 
       - name: Run integration tests
+        env:
+          RESTORE_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: npm run test:integration

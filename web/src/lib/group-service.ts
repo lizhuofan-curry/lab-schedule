@@ -4,6 +4,8 @@ import { and, asc, eq, ilike, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLogs, groupMembers, groups, students } from "@/db/schema";
 import type { CurrentMember } from "@/lib/server-auth";
+import { lockTaskGraph } from "@/lib/task-lock";
+import { syncActiveTasks } from "@/lib/task-service";
 
 export type GroupDirectoryMember = {
   studentId: number;
@@ -97,6 +99,7 @@ export async function createGroup(name: string, actor: CurrentMember) {
   await assertUniqueName(normalizedName);
   try {
     return await db.transaction(async (tx) => {
+      await lockTaskGraph(tx);
       await assertUniqueName(normalizedName, undefined, tx);
       const [group] = await tx.insert(groups).values({ name: normalizedName, createdByStudentId: actor.studentId }).returning();
       await tx.insert(groupMembers).values({ groupId: group.id, studentId: actor.studentId, role: "leader" });
@@ -119,6 +122,7 @@ export async function renameGroup(groupId: number, name: string, actor: CurrentM
   const normalizedName = normalizeGroupName(name);
   try {
     return await db.transaction(async (tx) => {
+      await lockTaskGraph(tx);
       await assertLeader(groupId, actor.studentId, tx);
       await assertUniqueName(normalizedName, groupId, tx);
       const [before] = await tx.select().from(groups).where(eq(groups.id, groupId)).limit(1);
@@ -135,6 +139,7 @@ export async function renameGroup(groupId: number, name: string, actor: CurrentM
 
 export async function addGroupMember(groupId: number, studentId: number, actor: CurrentMember) {
   return db.transaction(async (tx) => {
+    await lockTaskGraph(tx);
     await assertLeader(groupId, actor.studentId, tx);
     const [student] = await tx.select({ id: students.id, name: students.name }).from(students).where(and(eq(students.id, studentId), eq(students.enabled, true))).limit(1);
     if (!student) throw new GroupServiceError("STUDENT_NOT_FOUND", "成员不存在或已被停用。", 404);
@@ -143,12 +148,14 @@ export async function addGroupMember(groupId: number, studentId: number, actor: 
     const [membership] = await tx.insert(groupMembers).values({ groupId, studentId, role: "member" }).returning();
     await tx.update(groups).set({ updatedAt: new Date() }).where(eq(groups.id, groupId));
     await tx.insert(auditLogs).values({ actorUserId: actor.userId, action: "group.member.add", entityType: "group", entityId: String(groupId), after: JSON.stringify({ studentId, name: student.name }) });
+    await syncActiveTasks(tx, actor);
     return membership;
   });
 }
 
 export async function removeGroupMember(groupId: number, studentId: number, actor: CurrentMember) {
   return db.transaction(async (tx) => {
+    await lockTaskGraph(tx);
     await assertLeader(groupId, actor.studentId, tx);
     const [membership] = await tx.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.studentId, studentId))).limit(1);
     if (!membership) throw new GroupServiceError("GROUP_MEMBER_NOT_FOUND", "该成员不在这个小组中。", 404);
@@ -156,11 +163,13 @@ export async function removeGroupMember(groupId: number, studentId: number, acto
     await tx.delete(groupMembers).where(eq(groupMembers.id, membership.id));
     await tx.update(groups).set({ updatedAt: new Date() }).where(eq(groups.id, groupId));
     await tx.insert(auditLogs).values({ actorUserId: actor.userId, action: "group.member.remove", entityType: "group", entityId: String(groupId), before: JSON.stringify({ studentId }) });
+    await syncActiveTasks(tx, actor);
   });
 }
 
 export async function transferGroupLeader(groupId: number, studentId: number, actor: CurrentMember) {
   return db.transaction(async (tx) => {
+    await lockTaskGraph(tx);
     await assertLeader(groupId, actor.studentId, tx);
     if (studentId === actor.studentId) throw new GroupServiceError("ALREADY_GROUP_LEADER", "该成员已经是组长。", 409);
     const [target] = await tx.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.studentId, studentId))).limit(1);
@@ -174,11 +183,13 @@ export async function transferGroupLeader(groupId: number, studentId: number, ac
 
 export async function deleteGroup(groupId: number, actor: CurrentMember) {
   return db.transaction(async (tx) => {
+    await lockTaskGraph(tx);
     await assertLeader(groupId, actor.studentId, tx);
     const [before] = await tx.select().from(groups).where(eq(groups.id, groupId)).limit(1);
     if (!before) throw new GroupServiceError("GROUP_NOT_FOUND", "小组不存在或已被解散。", 404);
     await tx.delete(groups).where(eq(groups.id, groupId));
     await tx.insert(auditLogs).values({ actorUserId: actor.userId, action: "group.delete", entityType: "group", entityId: String(groupId), before: JSON.stringify(before) });
+    await syncActiveTasks(tx, actor);
   });
 }
 
