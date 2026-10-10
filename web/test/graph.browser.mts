@@ -110,10 +110,12 @@ try {
     expect(bounds!.height).toBe(width === 390 ? 844 : 1000);
     await page.screenshot({ path: `${output}/immersive-${width}.png`, fullPage: true });
     await openSettings(page);
+    const defaultNodeScale = width < 768 ? "0.8" : "1.7";
+    await expect(page.getByRole("slider", { name: /节点大小/ })).toHaveValue(defaultNodeScale);
     await expect(page.getByRole("button", { name: "关系图设置", exact: true })).toHaveAttribute("aria-expanded", "true");
     await page.getByRole("slider", { name: /节点大小/ }).fill("1.5");
     await expect(page.locator(".graph-display-controls output").first()).toHaveText("1.5倍");
-    await page.getByRole("slider", { name: /节点大小/ }).fill("1.7");
+    await page.getByRole("slider", { name: /节点大小/ }).fill(defaultNodeScale);
     await page.getByRole("slider", { name: /连线透明度/ }).fill("0.8");
     expect(Number(await page.locator(".graph-edge").first().getAttribute("opacity"))).toBe(.8);
     await page.getByRole("slider", { name: /连线透明度/ }).fill("0.5");
@@ -130,7 +132,7 @@ try {
     await page.getByRole("button", { name: "播放展开动画", exact: true }).click();
     await expect.poll(async () => page.locator(".graph-canvas > g").evaluate(el => getComputedStyle(el).opacity)).toBe("1");
     await page.screenshot({ path: `${output}/settings-${width}.png`, fullPage: true });
-    checks.push(`${width}px 默认1.7倍、折叠分区、类型配色、线宽、力度调整及重播动画通过`);
+    checks.push(`${width}px 默认${defaultNodeScale}倍、折叠分区、类型配色、线宽、力度调整及重播动画通过`);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "关系图设置", exact: true })).toBeFocused();
     await openSettings(page);
@@ -154,7 +156,8 @@ try {
     }));
     const degrees = new Map<string, number>();
     for (const edge of graph.edges) { degrees.set(edge.from, (degrees.get(edge.from) ?? 0) + 1); degrees.set(edge.to, (degrees.get(edge.to) ?? 0) + 1); }
-    expect(radii.every(node => node.radius >= 5.43 && node.radius <= 13.61)).toBeTruthy();
+    const nodeScale = Number(defaultNodeScale);
+    expect(radii.every(node => node.radius >= 3.2 * nodeScale - .01 && node.radius <= 8 * nodeScale + .01)).toBeTruthy();
     const sorted = radii.sort((x, y) => (degrees.get(x.id) ?? 0) - (degrees.get(y.id) ?? 0));
     for (let i = 1; i < sorted.length; i++) expect(sorted[i].radius + .01).toBeGreaterThanOrEqual(sorted[i - 1].radius);
     const started = performance.now();
@@ -192,7 +195,7 @@ try {
     await page.getByRole("combobox", { name: "来源状态", exact: true }).click();
     await page.getByRole("option", { name: "全部状态", exact: true }).click();
     checks.push(`${width}px 统一下拉样式、范围搜索/空结果、Enter选择、Esc返回焦点与状态切换通过`);
-    checks.push(`${width}px 初始节点半径5.44～13.6px（默认1.7倍）、按连接数递增、选中不增加或变黑边框`);
+    checks.push(`${width}px 默认${defaultNodeScale}倍、按连接数递增、选中不增加或变黑边框`);
     await page.getByRole("button", { name: "关闭关系图设置", exact: true }).click();
     await expect(page.locator(".graph-canvas")).toHaveAttribute("data-layout-state", "settled");
     const box = await page.locator(".graph-canvas").boundingBox();

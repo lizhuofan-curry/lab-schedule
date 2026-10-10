@@ -280,3 +280,12 @@ SSH重试后完成服务器内成套备份schedule-20261010T024040Z；在独立�
 清理后业务计数26|312|26|7|1|1|1|1|2|7与开启前一致；后台ready、4次真实调用、输入8984／输出20 token、本版本0条AI联系。成功分析且结果为空不等于故障，不强行给当前无充分依据的工作／任务连线，也不据这批正式空结果宣传真实数据准确率。最终成套备份schedule-20261010T024436Z数据库／附件SHA通过；备份恢复应用后首次HTTPS短暂502，等待容器健康再复核通过，最终站点健康正常。
 
 本轮证据在忽略目录web/test-results/v3.1/release：ai-human-review.json、ai-enable-{prepare,activate,cleanup,final,final-health}.log及ai-production/production-smoke.json。公开README和AGENTS同步已启用范围，GitHub项目与个人首页按用户授权同步，真实业务数据、密钥、浏览器截图及备份仍不入仓库；服务器外加密备份授权继续独立待定。
+
+
+### 手机关系图默认节点大小0.8（2026-10-10）
+
+按用户反馈，手机窄屏（小于768px）默认nodeScale改为0.8，桌面保持1.7；使用响应式订阅与独立手动覆盖值，避免SSR水合不一致，手动调整后保留选择，刷新页面重新采用设备默认。节点仍按连接数量递增，手机初始半径2.56～6.4px，桌面5.44～13.6px；不改变连线或业务数据。12需求及README同步。
+
+本轮lint、81项单元、含TypeScript的Windows生产构建及本机Linux镜像通过；隔离桌面1440px／手机390px共27项浏览器检查通过，运行错误0，实际滑块初始值及圆圈半径、设置调整、拖动防选字、手机双指、来源／删除失效与权限回归覆盖。1004节点桌面／手机绘制1995／2021ms，10次顺序API P95 87ms仅为本机合成基线。证据位于忽略目录web/test-results/v3.1/release/mobile-size-*，临时类型配置恢复。正式更新及GitHub同步正在执行，完成后在下文记录，不用本地结果代替线上验收。
+
+正式镜像tongpin-schedule:mobile-size-20261010已发布，保留rollback-mobile-size-20261010；服务器未编译、无迁移／依赖变化。发布前成套备份schedule-20261010T033700Z在独立恢复库核对数量、附件SHA及13条迁移通过，镜像上传SHA通过。正式1440px／390px6组验收通过，实际滑块桌面1.7／手机0.8、DeepSeek ready、来源及权限流程正常，运行错误0。临时成员40／41及虚构记录7先备份再精确清理，真实关联守卫通过、临时账号残留0。清理后业务计数26|312|26|7|1|1|1|1|2|7与本轮发布前一致，最终成套备份schedule-20261010T033954Z数据库／附件SHA通过；正式图谱及分析开关仍为1，后台ready及HTTPS健康复核通过。正式证据位于mobile-size-production/production-smoke.json及mobile-size-{publish,cleanup,final}.log，源／文档同步GitHub，密钥、真实数据、截图、镜像及备份保持忽略。

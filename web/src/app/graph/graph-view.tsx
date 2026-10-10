@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { ArrowLeft, Settings2, X } from "lucide-react";
 import Link from "next/link";
 import { graphLayout, type GraphData, type GraphNode, type GraphSource } from "@/lib/graph-rules";
@@ -8,6 +8,14 @@ import { SelectControl } from "@/components/form-controls";
 
 const statusLabels: Record<string, string> = { active: "进行中", paused: "暂停", completed: "已完成", cancelled: "已撤销", superseded: "历史轮次" };
 const kindLabels: Record<GraphNode["kind"], string> = { member: "成员", group: "小组", task: "任务", work: "工作记录", theme: "AI主题" };
+const mobileQuery = "(max-width: 767px)";
+function subscribeMobile(onChange: () => void) {
+  const query = window.matchMedia(mobileQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function isMobileViewport() { return window.matchMedia(mobileQuery).matches; }
+function desktopServerSnapshot() { return false; }
 async function read<T>(url: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
   const body = await response.json();
@@ -16,7 +24,9 @@ async function read<T>(url: string, signal: AbortSignal): Promise<T> {
 }
 export function GraphView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [nodeScale, setNodeScale] = useState(1.7);
+  const mobile = useSyncExternalStore(subscribeMobile, isMobileViewport, desktopServerSnapshot);
+  const [nodeScaleOverride, setNodeScale] = useState<number | null>(null);
+  const nodeScale = nodeScaleOverride ?? (mobile ? .8 : 1.7);
   const [lineOpacity, setLineOpacity] = useState(.5);
   const [lineWidth, setLineWidth] = useState(.6);
   const [colors, setColors] = useState({ member: "#5bd454", work: "#db585b", task: "#a15bda", group: "#ce8859" });
