@@ -1,0 +1,45 @@
+# Optional overlay: docker compose -f compose.yaml -f compose.analytics.yaml up -d
+services:
+  umami-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 192m
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DATABASE_PASSWORD:?请安全配置统计专用数据库密码}
+    volumes:
+      - umami_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    networks: [internal]
+  umami:
+    image: ${UMAMI_IMAGE:-ghcr.io/umami-software/umami:3.4.0}
+    restart: unless-stopped
+    init: true
+    mem_limit: 512m
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DATABASE_PASSWORD}@umami-db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?请安全配置统计专用认证密钥}
+      TWO_FACTOR_ENCRYPTION_KEY: ${UMAMI_TWO_FACTOR_KEY:?请安全配置统计专用双因素加密密钥}
+      DISABLE_TELEMETRY: "1"
+      PRIVATE_MODE: "1"
+      DISABLE_UPDATES: "1"
+      TZ: UTC
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    networks: [internal]
+volumes:
+  umami_data:

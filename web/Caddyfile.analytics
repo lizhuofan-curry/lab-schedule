@@ -1,0 +1,31 @@
+{$APP_DOMAIN} {
+  encode zstd gzip
+  handle /metrics/script.js {
+    rewrite * /script.js
+    reverse_proxy umami:3000
+  }
+  handle /metrics/api/send {
+    rewrite * /api/send
+    reverse_proxy umami:3000
+  }
+  handle {
+    reverse_proxy app:3000
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+}
+
+analytics.henubci.cn {
+  encode zstd gzip
+  reverse_proxy umami:3000
+  header {
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    X-Robots-Tag "noindex, nofollow"
+    -Server
+  }
+}

@@ -170,3 +170,11 @@ GET /api/graph沿用注册启用成员和严格范围参数，private,no-store�
 POST /api/graph/feedback严格接收{edgeId,version,reason}，reason trim后1至1000字、version为当前SHA-256。memberFor(write=true)验证会话和Origin，快照再次检查启用状态，所有者来自会话，不接受studentId。仅当前授权有效AI线可反馈；真实、未知或旧版本拒绝。结构校验沿用INVALID_COMMAND 422；服务层INVALID_FEEDBACK 422；GRAPH_CHANGED 409提示重新读取；游客403、匿名401、图关闭404。成功data.message为“已记录，不会立即修改公共关系图。”；重复幂等，不修改公共图，无反馈GET或公开列表。
 
 返回AI前校验两端引用逐字来自当前脱敏标题／说明；拒绝自环、非法类型、未知／完成／旧轮来源及危险HTML／链接。分析异常保留事实图。同课按系统规则核验，不信任模型生成课程事实。历史来源及本人写权限不变。
+
+## 可选匿名访问统计
+
+GET `/api/analytics-config`：匿名／游客／成员均可读取，仅返回 `{websiteId: UUID|null}`。独立开关关闭或ID非法时返回null；无缓存，不返回密钥、成员身份或统计面板凭据。
+
+Caddy仅将`/metrics/script.js`和`/metrics/api/send`代理到独立Umami服务。后者记录匿名统计事件，不是业务写接口，不写业务数据库，不赋予读取课表、任务详情或成员记录的权限。统计面板与其管理API位于独立子域名并使用独立账号，匿名不能读取网站统计数据，未开放分享链接。
+
+浏览器只发送预定义路由类别和固定点击事件；发送前清除查询、hash、referrer、业务标题、具体记录编号、用户标识及事件附加数据。点击上报异步执行，不等待统计响应、不阻止默认导航；DNT浏览器不发送。网站统计开关默认关闭，正式状态和验收证据统一见07-TASKS。

@@ -625,7 +625,7 @@ export function TaskListView({
         }
         actions={
           !guest && (
-            <Link className="button primary" href="/tasks/new">
+            <Link className="button primary" href="/tasks/new" data-analytics-event="task_create">
               <Plus size={18} />
               发布任务
             </Link>

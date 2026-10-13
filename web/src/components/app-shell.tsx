@@ -65,7 +65,7 @@ export function AppShell({ children, currentUser, guest = false }: { children: R
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href === "/tasks" && pathname.startsWith("/tasks/"));
             return (
-              <Link key={href} href={href} className={active ? "nav-item active" : "nav-item"} onClick={() => setOpen(false)}>
+              <Link key={href} href={href} data-analytics-event={`nav_${href.slice(1)}`} className={active ? "nav-item active" : "nav-item"} onClick={() => setOpen(false)}>
                 <Icon size={19} strokeWidth={1.8} />
                 <span>{label}</span>
               </Link>
@@ -90,7 +90,7 @@ export function AppShell({ children, currentUser, guest = false }: { children: R
         {mobileNavigation.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href === "/tasks" && pathname.startsWith("/tasks/"));
           return (
-            <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+            <Link key={href} href={href} data-analytics-event={`nav_${href.slice(1)}`} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
               <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
               <span>{label.replace("实验室", "")}</span>
             </Link>

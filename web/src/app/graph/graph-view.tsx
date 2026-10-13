@@ -210,7 +210,7 @@ export function GraphView() {
     else { setSelected(null); setSelectedEdge(null); }
   }}>
     <Link href="/dashboard" className="graph-return icon-button" aria-label="返回课表总览" title="返回课表总览"><ArrowLeft size={20} /></Link>
-    <button ref={settingsButton} className="graph-settings-button icon-button" aria-label="关系图设置" title="关系图设置" aria-expanded={settingsOpen} aria-controls="graph-settings" onClick={() => setSettingsOpen(open => !open)}><Settings2 size={20} /></button>
+    <button ref={settingsButton} data-analytics-event="graph_settings" className="graph-settings-button icon-button" aria-label="关系图设置" title="关系图设置" aria-expanded={settingsOpen} aria-controls="graph-settings" onClick={() => setSettingsOpen(open => !open)}><Settings2 size={20} /></button>
     <aside id="graph-settings" className="graph-settings" aria-label="关系图设置" hidden={!settingsOpen}>
       <header><h2>关系图设置</h2><button className="icon-button" aria-label="关闭关系图设置" onClick={() => { setSettingsOpen(false); settingsButton.current?.focus(); }}><X size={18} /></button></header>
       <details className="graph-settings-section" open><summary>筛选</summary><div className="graph-settings-section-body">

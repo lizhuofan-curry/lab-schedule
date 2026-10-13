@@ -80,3 +80,19 @@ sudo env RESTORE_CONFIRM=RESTORE_SCHEDULE sh scripts/restore-db.sh backups/sched
 新增0011迁移只建派生分析状态，不改任务/记录。先在隔离库验证迁移、权限及恢复，再按既有备份和本地Linux镜像流程发布；本地Windows构建不替代Linux镜像或正式验收。不得因模型调用失败反复开启收费重试；后台30秒/2分钟/每小时退避，不设置默认月度截断。
 
 自动分析依赖持续运行的Node应用，进程内循环加数据库租约；无需新容器或本地大模型。升级/重启后自动观察最新版本，旧租约到期可恢复。只读图与手动指定不依赖外部模型成功。停止AI时设分析开关0并重建应用；收回历史读取需同时关闭图开关并重建，原成员页仍为近期。回退旧应用可保留0011表，不恢复用户已删除来源。
+
+## 可选访问统计（Umami）
+
+统计服务使用独立的 Umami 3.4.0 容器和独立 PostgreSQL 数据卷，不复用业务数据库或业务账号。应用容器限制512MiB，统计数据库限制192MiB；镜像初次拉取后通过 `UMAMI_IMAGE` 固定摘要，升级需另行验收。
+
+在 `web/.env` 安全配置 `UMAMI_DATABASE_PASSWORD`（随机十六进制）、`UMAMI_APP_SECRET`、`UMAMI_TWO_FACTOR_KEY`（64位十六进制），添加统计网站后填写公开标识 `UMAMI_WEBSITE_ID`。`ANALYTICS_ENABLED=0` 默认关闭，设为1并重启网站后接入。凭据不得提交。首次仅开放本机3001端口，替换默认密码、验证默认密码被拒绝后，才使用 `Caddyfile.analytics` 开放 `analytics.henubci.cn`；网站仅代理 `/metrics/script.js` 和 `/metrics/api/send`，不通过该前缀暴露统计管理API。
+
+```bash
+docker compose -f compose.yaml -f compose.analytics.yaml up -d --no-build --wait umami-db umami
+```
+
+统计面板使用独立登录，不增加HenuBCI产品管理员。不要开放分享链接或使用成员学号作为统计身份。统计脚本保留Do Not Track设置，发送前隐藏动态业务编号、清除查询参数、hash、标题及referrer，只保留路径类别和固定点击事件，不采集姓名、学号、表单内容或工作任务正文。Umami的UV是匿名估算，多人在同一网络和浏览器环境下可能无法完全区分；请求被浏览器拦截时会漏计。统计从启用后开始，不能还原此前未记录的访问。
+
+统计数据库备份由 `scripts/backup-analytics.sh` 独立执行，输出到 `web/backups/analytics/`，保留35天，不混入业务数据库恢复。正式定时任务 `/etc/cron.d/henubci-analytics-backup` 使用服务器系统时区；UTC服务器每日04:15相当于北京时间12:15。备份SHA检查后，可在独立临时统计库实际 `pg_restore` 并比对网站和事件数量；不得覆盖在线统计库测试恢复。业务原备份流程保持独立。
+
+撤回统计接入时先设 `ANALYTICS_ENABLED=0` 并重启网站；恢复原Caddy配置、停统计容器即可，不删除数据卷。网站和统计服务故障应分别检查，统计故障不得阻断登录、课表、任务或关系图。
