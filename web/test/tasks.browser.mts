@@ -106,17 +106,25 @@ async function register(context: BrowserContext, name: string, no: string) {
   await page.waitForURL("**/dashboard");
   return page;
 }
-async function dismiss(page: Page) {
+async function dismiss(page: Page, hasAssignments = false) {
   const popup = page.getByRole("dialog", { name: "任务指派提醒" });
+  if (hasAssignments) await expect(popup).toBeVisible();
   if (await popup.isVisible()) {
     await popup.getByRole("button", { name: "知道了", exact: true }).click();
     await expect(popup).not.toBeVisible();
   }
 }
 async function go(page: Page, url: string) {
+  const inbox = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/notifications" && response.request().method() === "GET",
+  ).catch(() => null);
   await page.goto(`${origin}${url}`);
-  await page.waitForLoadState("networkidle");
-  await dismiss(page);
+  if (await page.locator(".task-notification-link").count()) {
+    const response = await inbox;
+    expect(response?.ok(), "站内消息加载成功").toBeTruthy();
+    const { data } = await response!.json();
+    await dismiss(page, data.assignments.length > 0);
+  }
 }
 async function waitTask(page: Page, status: string) {
   await expect(page.locator(".page-actions .task-badge")).toHaveText(status);
@@ -227,7 +235,7 @@ try {
   await go(a, "/tasks/new");
   await a.getByLabel("任务标题", { exact: true }).fill("浏览器公告任务");
   await a
-    .getByLabel("任务要求", { exact: true })
+    .getByLabel("共同要求", { exact: true })
     .fill("汇总本周实验，提交报告和结果说明。");
   await a.getByLabel("人数上限（留空不限）").fill("2");
   const deadlineField = a.locator(".task-deadline");
@@ -303,13 +311,29 @@ try {
   // Direct task via actual browser form: multi-member individual delivery.
   await go(a, "/tasks/new");
   await a.getByLabel("任务标题", { exact: true }).fill("浏览器逐人任务");
-  await a.getByLabel("任务要求", { exact: true }).fill("每人提交个人汇报");
+  await a.getByLabel("共同要求", { exact: true }).fill("每人提交个人汇报");
   await a.getByRole("combobox", { name: "任务类型", exact: true }).click();
   await a.getByRole("option", { name: "指定任务 · 直接安排", exact: true }).click();
   await a.getByRole("combobox", { name: "交付模式", exact: true }).click();
   await a.getByRole("option", { name: "每人分别交付", exact: true }).click();
+  const memberSearch = a.getByLabel("搜索成员姓名", { exact: true });
+  await memberSearch.fill("乙");
+  await expect(a.getByRole("checkbox", { name: "执行丙", exact: true })).toHaveCount(0);
   await a.getByRole("checkbox", { name: "执行乙", exact: true }).check();
+  const bAssignment = a.getByRole("textbox", { name: "执行乙的个人分工", exact: true });
+  await bAssignment.fill("**核对本周数据**");
+  await memberSearch.fill("丙");
+  await expect(a.getByRole("button", { name: "移除执行乙", exact: true })).toBeVisible();
   await a.getByRole("checkbox", { name: "执行丙", exact: true }).check();
+  const cAssignment = a.getByRole("textbox", { name: "执行丙的个人分工", exact: true });
+  await cAssignment.fill("绘制实验结果图");
+  await a.getByRole("button", { name: "移除执行丙", exact: true }).click();
+  await expect(cAssignment).toHaveCount(0);
+  await a.getByRole("checkbox", { name: "执行丙", exact: true }).check();
+  await expect(cAssignment).toHaveValue("绘制实验结果图");
+  await expect(bAssignment).toHaveValue("**核对本周数据**");
+  expect((await bAssignment.boundingBox())!.x).toBeLessThan((await memberSearch.boundingBox())!.x);
+  await a.screenshot({ path: path.join(output, "desktop-personal-assignments.png"), fullPage: true });
   await a.getByRole("button", { name: "发布任务", exact: true }).click();
   await a.waitForURL(/\/tasks\/\d+$/);
   const assignedId = Number(a.url().split("/").pop());
@@ -340,12 +364,17 @@ try {
   ).not.toBeVisible();
   checks.push("进入网站指派弹窗、知道了已读、刷新不重复");
   await go(b, `/tasks/${assignedId}`);
+  const bAssignments = b.locator(".task-personal-read");
+  await expect(bAssignments.locator("strong").filter({ hasText: "核对本周数据" })).toBeVisible();
+  await expect(bAssignments.getByText("绘制实验结果图", { exact: true })).toBeVisible();
   await b.getByLabel("成果说明", { exact: true }).fill("乙的成果");
   await b.getByRole("button", { name: "提交成果", exact: true }).click();
   await go(a, `/tasks/${assignedId}`);
   await a.getByRole("button", { name: "验收通过", exact: true }).click();
   await waitTask(a, "进行中");
   await go(c, `/tasks/${assignedId}`);
+  await expect(c.getByRole("heading", { name: /^执行[乙丙]/ })).toHaveText([/^执行丙/, "执行乙"]);
+  checks.push("桌面姓名搜索、跨关键词保留已选、分工草稿恢复及详情本人优先");
   await c.getByLabel("成果说明", { exact: true }).fill("丙的成果");
   await c.getByRole("button", { name: "提交成果", exact: true }).click();
   await go(a, `/tasks/${assignedId}`);
@@ -361,8 +390,18 @@ try {
   mp.on("pageerror", (e) => browserErrors.push(e.message));
   await go(mp, "/tasks/new");
   await mp.getByLabel("任务标题", { exact: true }).fill("手机任务");
-  await mp.getByLabel("任务要求", { exact: true }).fill("手机端完成的任务");
+  await mp.getByLabel("共同要求", { exact: true }).fill("手机端完成的任务");
+  const mobileSearch = mp.getByLabel("搜索成员姓名", { exact: true });
+  await mobileSearch.fill("乙");
+  await mobileSearch.evaluate((input) => input.scrollIntoView({ block: "center", behavior: "instant" }));
   await mp.getByRole("checkbox", { name: "执行乙", exact: true }).check();
+  const mobileAssignment = mp.getByRole("textbox", { name: "执行乙的个人分工", exact: true });
+  await mobileAssignment.fill("手机端填写的个人分工");
+  expect((await mobileAssignment.boundingBox())!.y).toBeGreaterThan((await mobileSearch.boundingBox())!.y);
+  await mobileSearch.evaluate((input) => {
+    window.scrollTo({ top: window.scrollY + input.getBoundingClientRect().top - 110, behavior: "instant" });
+  });
+  await mp.screenshot({ path: path.join(output, "mobile-personal-assignments.png") });
   await mp.getByRole("button", { name: "发布任务", exact: true }).click();
   await mp.waitForURL(/\/tasks\/\d+$/);
   const mobileId = Number(mp.url().split("/").pop());
@@ -370,16 +409,18 @@ try {
   await mp
     .getByRole("dialog")
     .filter({ has: mp.getByRole("heading", { name: "修改任务要求" }) })
-    .getByLabel("任务要求", { exact: true })
+    .getByLabel("共同要求", { exact: true })
     .fill("手机修改后的任务要求");
   await mp.getByRole("button", { name: "保存要求" }).click();
   await mp.getByRole("button", { name: "调整执行对象" }).click();
-  await mp
-    .getByRole("dialog", { name: "调整执行对象" })
-    .getByRole("checkbox", { name: "执行丙", exact: true })
-    .check();
+  const mobileTargets = mp.getByRole("dialog", { name: "调整执行对象" });
+  await expect(mobileTargets.getByRole("textbox", { name: "执行乙的个人分工", exact: true })).toHaveValue("手机端填写的个人分工");
+  await mobileTargets.getByLabel("搜索成员姓名", { exact: true }).fill("丙");
+  await mobileTargets.getByRole("checkbox", { name: "执行丙", exact: true }).check();
+  await mobileTargets.getByRole("textbox", { name: "执行丙的个人分工", exact: true }).fill("调整执行对象时补写的分工");
   await mp.getByRole("button", { name: "保存执行对象" }).click();
   await expect(mp.locator(".task-roster-list > div")).toHaveCount(2);
+  await expect(mp.locator(".task-personal-read").getByText("调整执行对象时补写的分工", { exact: true })).toBeVisible();
   await mp.screenshot({
     path: path.join(output, "mobile-task.png"),
     fullPage: true,
@@ -389,7 +430,7 @@ try {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBeTruthy();
-  checks.push("390px发布、修改要求、调整执行对象及无页面溢出");
+  checks.push("390px单列填写分工，发布、修改要求、调整执行对象及无页面溢出");
   const mb = await browser.newContext({
     viewport: { width: 390, height: 844 },
   });
@@ -436,7 +477,7 @@ try {
   await go(a, "/tasks/new");
   await a.getByLabel("任务标题", { exact: true }).fill("多个小组共同任务");
   await a
-    .getByLabel("任务要求", { exact: true })
+    .getByLabel("共同要求", { exact: true })
     .fill("个人和两个小组一起完成");
   await a.getByRole("combobox", { name: "任务类型", exact: true }).click();
   await a.getByRole("option", { name: "指定任务 · 直接安排", exact: true }).click();
@@ -529,7 +570,10 @@ try {
     await expect(a.locator(".task-message")).toHaveCount(202);
     await a.getByRole("button", { name: "查看更早消息", exact: true }).click();
     await expect.poll(() => a.locator(".task-message").count()).toBeGreaterThan(202);
-    await a.getByRole("checkbox", { name: "全选已加载的已读消息", exact: true }).check();
+    const selectAll = a.getByRole("checkbox", { name: "全选已加载的已读消息", exact: true });
+    await a.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await selectAll.press("Space");
+    await expect(selectAll).toBeChecked();
     const selectedCount = await a.locator(".task-message input[type=checkbox]:checked").count();
     expect(selectedCount).toBeGreaterThan(200);
     await a.getByRole("button", { name: "删除所选", exact: true }).click();
@@ -709,11 +753,11 @@ try {
   await a.getByRole("combobox", { name: "任务类型" }).click();
   await a.getByRole("option", { name: "公告任务 · 自行领取", exact: true }).click();
   const markdown = "## 验收标题\n\n**清晰要求**\n\n- 第一项\n- 第二项\n\n| 项目 | 状态 |\n| --- | --- |\n| 实验 | 待做 |\n\n```txt\n代码内容\n```\n\n<script>window.markdownAttack=1</script>\n\n[危险链接](javascript:alert(1))\n\n![追踪图片](https://example.invalid/track.png)";
-  await a.getByLabel("任务要求", { exact: true }).fill(markdown);
+  await a.getByLabel("共同要求", { exact: true }).fill(markdown);
   await a.getByRole("button", { name: "预览", exact: true }).click();
-  await expect(a.getByLabel("任务要求预览").getByRole("heading", { name: "验收标题" })).toBeVisible();
-  await expect(a.getByLabel("任务要求预览").locator("table")).toHaveCount(1);
-  await expect(a.getByLabel("任务要求预览").locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(a.getByRole("region", { name: "共同要求预览", exact: true }).getByRole("heading", { name: "验收标题" })).toBeVisible();
+  await expect(a.getByRole("region", { name: "共同要求预览", exact: true }).locator("table")).toHaveCount(1);
+  await expect(a.getByRole("region", { name: "共同要求预览", exact: true }).locator('a[href^="javascript:"]')).toHaveCount(0);
   await a.getByRole("button", { name: "编辑", exact: true }).click();
   const pageOne = "BT /F1 16 Tf 30 100 Td (PDF Preview) Tj ET\n";
   const pageTwo = "BT /F1 16 Tf 30 160 Td (Second page) Tj ET\n";
@@ -744,7 +788,7 @@ try {
   await expect(a.locator(".task-requirements .task-markdown").getByRole("heading", { name: "验收标题" })).toBeVisible();
   await a.getByRole("button", { name: "修改要求", exact: true }).click();
   const editor = a.getByRole("dialog", { name: "修改任务要求" });
-  await editor.getByLabel("任务要求", { exact: true }).fill(markdown + "\n\n修改已保存");
+  await editor.getByLabel("共同要求", { exact: true }).fill(markdown + "\n\n修改已保存");
   await editor.getByRole("button", { name: "预览", exact: true }).click();
   await expect(editor.getByText("修改已保存", { exact: true })).toBeVisible();
   await editor.getByRole("button", { name: "保存要求", exact: true }).click();

@@ -272,6 +272,10 @@ export const taskRounds = pgTable(
     number: integer("number").notNull(),
     title: text("title").notNull(),
     description: text("description").notNull(),
+    personalAssignments: jsonb("personal_assignments")
+      .$type<{ studentId: number; description: string }[]>()
+      .default([])
+      .notNull(),
     deadline: timestamp("deadline", { withTimezone: true }),
     capacity: integer("capacity"),
     claimsOpen: boolean("claims_open").default(false).notNull(),
@@ -298,6 +302,7 @@ export const taskRounds = pgTable(
       "round_outcome_check",
       sql`${t.outcome} is null or ${t.outcome} in ('completed','cancelled')`,
     ),
+    check("round_personal_assignments_array", sql`jsonb_typeof(${t.personalAssignments}) = 'array'`),
   ],
 );
 export const taskParticipants = pgTable(

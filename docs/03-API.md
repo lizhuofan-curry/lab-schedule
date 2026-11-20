@@ -123,6 +123,8 @@ GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/
 
 edit/targets/close/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。类型/交付模式不可编辑，打回原因必填。
 
+任务轮次包含 `personalAssignments`，每项为 `{studentId, description}`。发布及 `targets` 可提交此字段，个人分工去除首尾空白后为 1～20000 字，成员 ID 唯一，且必须符合当次分工范围。`targets` 省略字段时沿用仍有效的分工，传 `[]` 时清空。调整仍需发布者身份及匹配的修订号，分工变更随任务业务历史读取。`GET /api/task-options` 的同名成员选项附 `studentNoSuffix`（学号末四位），其他选项为 `null`。
+
 POST /api/task-files：成员multipart单文件上传，单文件10MiB、允许扩展名及内容签名验证。GET /api/task-files/:id：成员下载已关联文件；未关联仅上传者可访问，禁止游客，下载禁缓存且nosniff。POST写入校验Origin，JSON请求限256KiB，multipart限11MiB。附件不提供公开URL。
 
 GET /api/task-files/:id?preview=1：复用同一成员鉴权、清理中拒绝和SHA-256/大小校验，固定安全MIME及inline响应；仅PDF、PNG/JPEG、TXT和MD/Markdown。文本/Markdown以text/plain返回，由安全组件渲染，不作为HTML响应。文本预览上限256KiB，超过或不支持格式返回FILE_PREVIEW_TOO_LARGE/FILE_PREVIEW_UNSUPPORTED（422）并提示下载；不改变10MiB上传限制。保持private,no-store、nosniff及沙箱CSP，下载不带preview仍为attachment。客户端只对任务资料打开预览，成果保持下载；游客403、匿名401、未关联他人/清理中文件404。

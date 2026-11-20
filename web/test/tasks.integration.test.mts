@@ -260,7 +260,8 @@ test("任务所有权：A能看B但不能改验收撤销重开B任务", async ()
   await assert.rejects(submit(t.id, c), errorCode("FORBIDDEN_EXECUTOR"));
 });
 test("游客仅六个列表白名单含分类标识，详情附件消息和写入拒绝，匿名无列表", async () => {
-  const t = await createTask(input(), a);
+  const personalAssignments = [{ studentId: b.studentId, description: "单独整理这批原始数据" }];
+  const t = await createTask(input({ personalAssignments }), a);
   const guestHeaders = { cookie: "bci_guest_access=1", origin };
   const req = (url: string, method = "GET", body?: unknown) =>
     new Request(`${origin}${url}`, {
@@ -272,9 +273,17 @@ test("游客仅六个列表白名单含分类标识，详情附件消息和写�
   assert.equal(list.status, 200);
   const rows = (await list.json()).data;
   assert.deepEqual(
-    Object.keys(rows[0]).sort(),
+    Object.keys(rows.find((row: { id: number }) => row.id === t.id)).sort(),
     ["id", "title", "publisher", "deadline", "status", "kind"].sort(),
   );
+  const detailUrl = `${origin}/api/tasks/${t.id}`;
+  const context = { params: Promise.resolve({ id: String(t.id) }) };
+  const reader = await detailRoute.GET(new Request(detailUrl, {
+    headers: { cookie: cookies[c.studentNo] },
+  }), context);
+  assert.equal(reader.status, 200);
+  assert.deepEqual((await reader.json()).data.rounds[0].personalAssignments, personalAssignments);
+  assert.equal((await detailRoute.GET(new Request(detailUrl), context)).status, 401);
   assert.equal(
     (
       await detailRoute.GET(req(`/api/tasks/${t.id}`), {
@@ -303,6 +312,139 @@ test("游客仅六个列表白名单含分类标识，详情附件消息和写�
     (await taskRoute.GET(new Request(`${origin}/api/tasks`))).status,
     401,
   );
+});
+
+test("任务成员选项仅为同名成员提供学号末四位", async () => {
+  const unique = (await taskOptions()).members.find((m) => m.id === b.studentId);
+  assert.deepEqual(unique, { id: b.studentId, name: b.name, studentNoSuffix: null });
+  await db.update(schema.students).set({ name: b.name }).where(eq(schema.students.id, c.studentId));
+  try {
+    const matches = (await taskOptions()).members.filter((m) => m.name === b.name);
+    assert.deepEqual(
+      matches.sort((first, second) => first.id - second.id),
+      [b, c].map((actor) => ({
+        id: actor.studentId, name: b.name, studentNoSuffix: actor.studentNo.slice(-4),
+      })),
+    );
+  } finally {
+    await db.update(schema.students).set({ name: c.name }).where(eq(schema.students.id, c.studentId));
+  }
+});
+
+test("指定任务分工跟随直接指定，修改提醒当事人并保留验收和各轮历史", async () => {
+  const group = await createGroup("个人分工验证组", a);
+  await addGroupMember(group.id, b.studentId, a);
+  const directIds = [b.studentId, c.studentId];
+  const groupIds = [group.id];
+  const personalAssignments = [
+    { studentId: b.studentId, description: "**整理数据**" },
+    { studentId: c.studentId, description: "绘制实验图" },
+  ];
+  const post = (body: unknown) => taskRoute.POST(new Request(`${origin}/api/tasks`, {
+    method: "POST",
+    headers: { origin, cookie: cookies[a.studentNo], "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }));
+  const groupOnly = await post(input({
+    directIds: [c.studentId], groupIds, personalAssignments,
+  }));
+  assert.equal(groupOnly.status, 422);
+  const duplicate = await post(input({
+    directIds, groupIds, personalAssignments: [personalAssignments[0], personalAssignments[0]],
+  }));
+  assert.equal(duplicate.status, 422);
+  const published = await post(input({ directIds, groupIds, personalAssignments }));
+  assert.equal(published.status, 201);
+  const { id, memberCount } = (await published.json()).data;
+  assert.equal(memberCount, 3);
+  let d = await detail(id);
+  assert.deepEqual(d.rounds[0].personalAssignments, personalAssignments);
+  const originalRoundId = d.rounds[0].id;
+
+  const update = { action: "targets" as const, directIds, groupIds, capacity: null };
+  await assert.rejects(commandTask(id, {
+    ...update, expectedRevision: d.revision, personalAssignments: [],
+  }, b), errorCode("FORBIDDEN_OWNER"));
+  await submit(id, b);
+  await approve(id);
+  d = await detail(id);
+  const notificationsFor = async (actor: Actor) =>
+    (await notifications(actor)).messages.filter((message) => message.taskId === id).length;
+  const [bNotices, cNotices] = await Promise.all([notificationsFor(b), notificationsFor(c)]);
+  const updatedAssignments = [
+    { studentId: b.studentId, description: "整理数据并核对缺失值" },
+    personalAssignments[1],
+  ];
+  await commandTask(id, {
+    ...update, expectedRevision: d.revision, personalAssignments: updatedAssignments,
+  }, a);
+  d = await detail(id);
+  assert.deepEqual(d.rounds[0].personalAssignments, updatedAssignments);
+  assert.equal(d.submissions.find((s) => s.authorId === b.studentId)?.status, "approved");
+  assert.equal(await notificationsFor(b), bNotices + 1);
+  assert.equal(await notificationsFor(c), cNotices);
+  const change = d.events.find((event) => event.action === "targets");
+  assert.ok(change);
+  assert.deepEqual(
+    (change.detail.before as { personalAssignments: unknown }).personalAssignments,
+    [{ ...personalAssignments[0], name: b.name }],
+  );
+  assert.deepEqual(
+    (change.detail.after as { personalAssignments: unknown }).personalAssignments,
+    [{ ...updatedAssignments[0], name: b.name }],
+  );
+
+  // Older clients omit the new field. They preserve unaffected assignments and clear removed ones.
+  await commandTask(id, {
+    ...update, expectedRevision: d.revision, directIds: [c.studentId],
+  }, a);
+  d = await detail(id);
+  assert.ok(d.members.some((p) => p.studentId === b.studentId && p.active));
+  assert.deepEqual(d.rounds[0].personalAssignments, [personalAssignments[1]]);
+  await commandTask(id, { ...update, expectedRevision: d.revision }, a);
+  d = await detail(id);
+  assert.deepEqual(d.rounds[0].personalAssignments, [personalAssignments[1]]);
+  await commandTask(id, { action: "cancel", expectedRevision: d.revision }, a);
+  d = await detail(id);
+  await commandTask(id, {
+    action: "reopen", expectedRevision: d.revision, claimsOpen: false, deadline: null,
+  }, a);
+  d = await detail(id);
+  assert.equal(d.rounds[0].number, 2);
+  assert.deepEqual(d.rounds[0].personalAssignments, [personalAssignments[1]]);
+  await commandTask(id, {
+    ...update, expectedRevision: d.revision, personalAssignments: [],
+  }, a);
+  d = await detail(id);
+  assert.deepEqual(d.rounds[0].personalAssignments, []);
+  assert.deepEqual(d.rounds.find((round) => round.id === originalRoundId)?.personalAssignments, [personalAssignments[1]]);
+});
+
+test("公开任务给主动领取者补分工保留参与记录、领取来源和历史", async () => {
+  const initial = { studentId: b.studentId, description: "准备实验资料" };
+  const { id } = await createTask(input({
+    kind: "announcement", delivery: "shared", capacity: 2, personalAssignments: [initial],
+  }), a);
+  await commandTask(id, { action: "claim" }, c);
+  let d = await detail(id);
+  const claimant = d.members.find((p) => p.studentId === c.studentId)!;
+  const [claim] = d.events.filter((event) => event.action === "claimed");
+  const potential = { studentId: c.studentId, description: "记录实验过程" };
+  await commandTask(id, {
+    action: "targets",
+    expectedRevision: d.revision,
+    directIds: [b.studentId, c.studentId],
+    groupIds: [],
+    capacity: 2,
+    personalAssignments: [initial, potential],
+  }, a);
+  d = await detail(id);
+  assert.deepEqual(d.rounds[0].personalAssignments, [initial, potential]);
+  assert.deepEqual(d.rounds[0].directIds, [b.studentId]);
+  assert.equal(d.rounds[0].claimsOpen, true);
+  assert.deepEqual(d.members.find((p) => p.studentId === c.studentId), claimant);
+  assert.deepEqual(d.events.filter((event) => event.action === "claimed"), [claim]);
+  assert.ok(!(await notifications(c)).assignments.some((message) => message.taskId === id));
 });
 test("并发领取最后一名额仅一次成功，重复领取不增人数", async () => {
   const t = await createTask(

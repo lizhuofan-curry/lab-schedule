@@ -31,6 +31,7 @@ import { taskIsComplete, taskSubject } from "./task-rules";
 
 type Task = typeof collabTasks.$inferSelect;
 type Round = typeof taskRounds.$inferSelect;
+type PersonalAssignments = Round["personalAssignments"];
 export class TaskError extends Error {
   constructor(
     public code: string,
@@ -191,15 +192,39 @@ async function resolveTargets(
     ),
   };
 }
+function resolvePersonalAssignments(
+  selectedIds: ReadonlySet<number>,
+  input?: PersonalAssignments,
+  previous: PersonalAssignments = [],
+) {
+  if (input?.some(({ studentId }) => !selectedIds.has(studentId)))
+    fail("INVALID_TARGET", "请先选择要填写个人分工的成员。");
+  return input ?? previous.filter(({ studentId }) => selectedIds.has(studentId));
+}
+function assignmentSnapshot(
+  assignments: PersonalAssignments,
+  members: { id: number; name: string }[],
+) {
+  const names = new Map(members.map(({ id, name }) => [id, name]));
+  return assignments.map((entry) => ({ ...entry, name: names.get(entry.studentId) }));
+}
+function changedAssignmentIds(before: PersonalAssignments, after: PersonalAssignments) {
+  const oldText = new Map(before.map(({ studentId, description }) => [studentId, description]));
+  const newText = new Map(after.map(({ studentId, description }) => [studentId, description]));
+  return new Set(
+    [...oldText.keys(), ...newText.keys()].filter((id) => oldText.get(id) !== newText.get(id)),
+  );
+}
 async function reconcile(
   tx: TaskTx,
   task: Task,
   round: Round,
   actor: CurrentMember | null = null,
+  selectedMembers?: { id: number; name: string }[],
 ) {
   if (task.status !== "active") return;
   const before = await participants(tx, round.id);
-  const desired =
+  const desired = selectedMembers ?? (
     task.kind === "assigned"
       ? (await resolveTargets(tx, round.directIds, round.groupIds, false))
           .members
@@ -208,7 +233,8 @@ async function reconcile(
             .select({ id: students.id, name: students.name })
             .from(students)
             .where(and(eq(students.enabled, true), isNotNull(students.userId)))
-        ).filter((s) => before.some((p) => p.active && p.studentId === s.id));
+        ).filter((s) => before.some((p) => p.active && p.studentId === s.id))
+  );
   const desiredIds = new Set(desired.map((s) => s.id));
   const removed = before.filter(
     (p) => p.active && !desiredIds.has(p.studentId),
@@ -240,14 +266,31 @@ async function reconcile(
         .values({ roundId: round.id, studentId: s.id, name: s.name });
   }
   if (removed.length || added.length) {
-    await retireAssignments(
-      tx,
-      round.id,
-      removed.map((p) => p.studentId),
+    const removedIds = new Set(removed.map((p) => p.studentId));
+    const removedAssignments = round.personalAssignments.filter(({ studentId }) =>
+      removedIds.has(studentId),
     );
+    const directIds = task.kind === "announcement"
+      ? round.directIds.filter((id) => !removedIds.has(id))
+      : round.directIds;
+    if (removedAssignments.length || directIds.length !== round.directIds.length)
+      await tx.update(taskRounds)
+        .set({
+          directIds,
+          personalAssignments: round.personalAssignments.filter(({ studentId }) =>
+            !removedIds.has(studentId),
+          ),
+        })
+        .where(eq(taskRounds.id, round.id));
+    await retireAssignments(tx, round.id, [...removedIds]);
+    const removedMembers = removed.map((p) => ({ id: p.studentId, name: p.name }));
     await event(tx, task, round, actor, "members", {
       added: added.map((s) => ({ id: s.id, name: s.name })),
-      removed: removed.map((p) => ({ id: p.studentId, name: p.name })),
+      removed: removedMembers,
+      ...(removedAssignments.length ? {
+        before: { personalAssignments: assignmentSnapshot(removedAssignments, removedMembers) },
+        after: { personalAssignments: [] },
+      } : {}),
     });
     await notify(
       tx,
@@ -261,7 +304,7 @@ async function reconcile(
       tx,
       task,
       round,
-      removed.map((p) => p.studentId),
+      [...removedIds],
       "你已不再承担这项任务，历史成果保留。",
     );
     await notify(
@@ -389,6 +432,9 @@ export async function createTask(input: TaskCreate, actor: CurrentMember) {
       fail("INVALID_TARGET", "所选小组没有可执行的注册成员，请选择其他成员。");
     if (input.capacity !== null && input.directIds.length > input.capacity)
       fail("CLAIM_FULL", "当前成员超过人数上限，请先调高上限。", 409);
+    const personalAssignments = resolvePersonalAssignments(
+      new Set(input.directIds), input.personalAssignments,
+    );
     const [task] = await tx
       .insert(collabTasks)
       .values({
@@ -405,6 +451,7 @@ export async function createTask(input: TaskCreate, actor: CurrentMember) {
         number: 1,
         title: input.title,
         description: input.description,
+        personalAssignments,
         deadline: input.deadline ? new Date(input.deadline) : null,
         capacity: input.capacity,
         claimsOpen: input.kind === "announcement",
@@ -430,10 +477,13 @@ export async function createTask(input: TaskCreate, actor: CurrentMember) {
         "你被加入公告任务，请查看任务要求。",
         true,
       );
-    } else await reconcile(tx, task, round, actor);
+    } else await reconcile(tx, task, round, actor, targets.members);
     await event(tx, task, round, actor, "published", {
       title: round.title,
       description: round.description,
+      ...(personalAssignments.length ? {
+        personalAssignments: assignmentSnapshot(personalAssignments, targets.members),
+      } : {}),
       fileIds: round.fileIds,
       excluded: targets.excluded,
       memberCount: targets.members.length,
@@ -478,8 +528,22 @@ export async function commandTask(
     if (command.action === "reopen") {
       if (task.status === "active")
         fail("TASK_ACTIVE", "任务正在进行，无需重新开启。", 409);
-      const oldParticipants = (await participants(tx, round.id)).filter(
-        (p) => p.active,
+      const sourceIds = task.kind === "assigned"
+        ? round.directIds
+        : (await participants(tx, round.id)).filter((p) => p.active).map((p) => p.studentId);
+      const valid = await resolveTargets(
+        tx,
+        sourceIds,
+        round.groupIds,
+        false,
+      );
+      const validIds = new Set(valid.members.map((member) => member.id));
+      const assignmentTargets = new Set(sourceIds);
+      const directIds = task.kind === "assigned"
+        ? round.directIds
+        : round.directIds.filter((id) => validIds.has(id));
+      const personalAssignments = round.personalAssignments.filter(({ studentId }) =>
+        validIds.has(studentId) && assignmentTargets.has(studentId),
       );
       const [next] = await tx
         .insert(taskRounds)
@@ -488,10 +552,11 @@ export async function commandTask(
           number: task.currentRound + 1,
           title: round.title,
           description: round.description,
+          personalAssignments,
           deadline: command.deadline ? new Date(command.deadline) : null,
           capacity: round.capacity,
           claimsOpen: task.kind === "announcement" && command.claimsOpen,
-          directIds: round.directIds,
+          directIds,
           groupIds: round.groupIds,
           groupNames: round.groupNames,
           fileIds: round.fileIds,
@@ -507,14 +572,8 @@ export async function commandTask(
         })
         .where(eq(collabTasks.id, id))
         .returning();
-      if (task.kind === "assigned") await reconcile(tx, updated, next, actor);
+      if (task.kind === "assigned") await reconcile(tx, updated, next, actor, valid.members);
       else {
-        const valid = await resolveTargets(
-          tx,
-          oldParticipants.map((p) => p.studentId),
-          [],
-          false,
-        );
         if (valid.members.length)
           await tx.insert(taskParticipants).values(
             valid.members.map((s) => ({
@@ -534,6 +593,9 @@ export async function commandTask(
       }
       await event(tx, updated, next, actor, "reopened", {
         previousRound: round.number,
+        ...(personalAssignments.length ? {
+          personalAssignments: assignmentSnapshot(personalAssignments, valid.members),
+        } : {}),
       });
       return { id };
     }
@@ -646,19 +708,30 @@ export async function commandTask(
         targets.members.length > command.capacity
       )
         fail("CLAIM_FULL", "执行人数超过上限，请先调高上限。", 409);
+      const selectedIds = new Set(command.directIds);
+      const personalAssignments = resolvePersonalAssignments(
+        selectedIds, command.personalAssignments, round.personalAssignments,
+      );
+      const changedIds = changedAssignmentIds(round.personalAssignments, personalAssignments);
+      const activeIds = new Set(active.map((member) => member.studentId));
+      const previousDirectIds = new Set(round.directIds);
+      // The announcement editor includes claimants as well as manual targets.
+      const directIds = task.kind === "assigned"
+        ? command.directIds
+        : command.directIds.filter((id) => previousDirectIds.has(id) || !activeIds.has(id));
       const [updated] = await tx
         .update(taskRounds)
         .set({
-          directIds: command.directIds,
+          directIds,
           groupIds: command.groupIds,
           groupNames: targets.groupNames,
           capacity: command.capacity,
+          personalAssignments,
         })
         .where(eq(taskRounds.id, round.id))
         .returning();
       if (task.kind === "announcement") {
-        const desired = new Set(command.directIds);
-        for (const p of active.filter((p) => !desired.has(p.studentId))) {
+        for (const p of active.filter((p) => !selectedIds.has(p.studentId))) {
           await retireAssignments(tx, round.id, [p.studentId]);
           await tx
             .update(taskParticipants)
@@ -673,7 +746,7 @@ export async function commandTask(
           );
         }
         for (const s of targets.members.filter(
-          (s) => !active.some((p) => p.studentId === s.id),
+          (s) => !activeIds.has(s.id),
         )) {
           const existing = (await participants(tx, round.id)).find(
             (p) => p.studentId === s.id,
@@ -701,24 +774,40 @@ export async function commandTask(
             true,
           );
         }
-      } else await reconcile(tx, task, updated, actor);
+      } else await reconcile(tx, task, updated, actor, targets.members);
+      const before = active.map((p) => ({ id: p.studentId, name: p.name }));
+      const changedAssignmentsBefore = round.personalAssignments.filter(({ studentId }) => changedIds.has(studentId));
+      const changedAssignmentsAfter = personalAssignments.filter(({ studentId }) => changedIds.has(studentId));
       await event(tx, task, round, actor, "targets", {
         before: {
           directIds: round.directIds,
           groupIds: round.groupIds,
           groupNames: round.groupNames,
           capacity: round.capacity,
-          members: active.map((p) => ({ id: p.studentId, name: p.name })),
+          members: before,
+          ...(changedIds.size ? {
+            personalAssignments: assignmentSnapshot(changedAssignmentsBefore, before),
+          } : {}),
         },
         after: {
-          directIds: command.directIds,
+          directIds,
           groupIds: command.groupIds,
           groupNames: targets.groupNames,
           capacity: command.capacity,
           members: targets.members,
           excluded: targets.excluded,
+          ...(changedIds.size ? {
+            personalAssignments: assignmentSnapshot(changedAssignmentsAfter, targets.members),
+          } : {}),
         },
       });
+      await notify(
+        tx,
+        task,
+        updated,
+        targets.members.filter(({ id }) => changedIds.has(id) && activeIds.has(id)).map(({ id }) => id),
+        "发布者更新了你的个人分工，请查看任务详情。",
+      );
     } else if (command.action === "close") {
       if (task.kind !== "announcement")
         fail("INVALID_COMMAND", "指定任务没有领取入口。");
@@ -868,7 +957,18 @@ export async function commandTask(
 export async function listTasks(guest: boolean, studentId?: number) {
   await sync();
   const rows = await db
-    .select({ task: collabTasks, round: taskRounds, publisher: students.name })
+    .select({
+      task: collabTasks,
+      round: {
+        id: taskRounds.id,
+        title: taskRounds.title,
+        deadline: taskRounds.deadline,
+        capacity: taskRounds.capacity,
+        claimsOpen: taskRounds.claimsOpen,
+        number: taskRounds.number,
+      },
+      publisher: students.name,
+    })
     .from(collabTasks)
     .innerJoin(
       taskRounds,
@@ -966,7 +1066,14 @@ export async function taskDetail(id: number) {
 export type TaskDetail = Awaited<ReturnType<typeof taskDetail>>;
 export async function taskOptions() {
   const members = await db
-    .select({ id: students.id, name: students.name })
+    .select({
+      id: students.id,
+      name: students.name,
+      studentNoSuffix: sql<string | null>`
+        case when count(*) over (partition by ${students.name}) > 1
+          then right(${students.studentNo}, 4)
+        end`,
+    })
     .from(students)
     .where(and(eq(students.enabled, true), isNotNull(students.userId)))
     .orderBy(asc(students.name));
@@ -995,9 +1102,8 @@ export async function notifications(actor: CurrentMember, before?: number) {
     .limit(200);
   const active = await db
     .select({
-      task: collabTasks,
-      round: taskRounds,
-      participant: taskParticipants,
+      taskId: collabTasks.id,
+      roundId: taskRounds.id,
     })
     .from(collabTasks)
     .innerJoin(
@@ -1029,7 +1135,7 @@ export async function notifications(actor: CurrentMember, before?: number) {
     )
     .orderBy(desc(taskNotifications.id));
   const assignments = unreadAssignments.filter((m) =>
-    active.some((a) => a.task.id === m.taskId && a.round.id === m.roundId),
+    active.some((a) => a.taskId === m.taskId && a.roundId === m.roundId),
   );
   const taskIds = [
     ...new Set([...messages, ...assignments].map((m) => m.taskId)),

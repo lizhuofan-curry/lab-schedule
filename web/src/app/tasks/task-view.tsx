@@ -9,6 +9,7 @@ import {
   ClipboardList,
   FileText,
   Plus,
+  Search,
   Upload,
   X,
 } from "lucide-react";
@@ -36,10 +37,11 @@ type Json<T> = T extends Date
       : T;
 export type Detail = Json<TaskDetail>;
 export type Options = {
-  members: { id: number; name: string }[];
+  members: { id: number; name: string; studentNoSuffix: string | null }[];
   groups: { id: number; name: string; members: { id: number; name: string }[]; excluded: { id: number; name: string; reason: string }[] }[];
 };
 type Person = { name: string; studentNo: string; studentId: number };
+type PersonalAssignment = NonNullable<TaskCreate["personalAssignments"]>[number];
 type FileInfo = { id: string; name: string; size: number };
 type UnboundFile = FileInfo & { deleting: boolean };
 export type ListItem = {
@@ -82,10 +84,12 @@ export function TaskModal({
   title,
   onClose,
   children,
+  wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -97,7 +101,7 @@ export function TaskModal({
   }, []);
   return (
     <dialog
-      className="task-dialog"
+      className={wide ? "task-dialog task-target-dialog" : "task-dialog"}
       ref={ref}
       onCancel={(e) => {
         e.preventDefault();
@@ -370,21 +374,75 @@ function FilePicker({
     </div>
   );
 }
+function memberLabels(members: Options["members"]) {
+  const counts = new Map<string, number>();
+  for (const { name } of members) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return new Map(members.map(({ id, name, studentNoSuffix }) => [
+    id,
+    (counts.get(name) ?? 0) > 1 && studentNoSuffix ? `${name}（学号末四位 ${studentNoSuffix}）` : name,
+  ]));
+}
+
+function assignmentsForSave(ids: number[], drafts: Record<number, string>): PersonalAssignment[] {
+  return ids.flatMap((studentId) => {
+    const description = drafts[studentId]?.trim();
+    return description ? [{ studentId, description }] : [];
+  });
+}
+
+function PersonalAssignmentEditors({
+  ids,
+  labels,
+  drafts,
+  onChange,
+}: {
+  ids: number[];
+  labels: Map<number, string>;
+  drafts: Record<number, string>;
+  onChange: (studentId: number, value: string) => void;
+}) {
+  const selected = ids.filter((id) => labels.has(id));
+  if (!selected.length) return null;
+  return (
+    <section className="task-personal-fields" aria-label="个人分工">
+      <h3>个人分工 <small>选填</small></h3>
+      {selected.map((id) => {
+        const name = labels.get(id)!;
+        return (
+          <div className="task-personal-editor" key={id}>
+            <TaskMarkdownEditor
+              label={`${name}的个人分工`}
+              fieldLabel={name}
+              value={drafts[id] ?? ""}
+              onChange={(value) => onChange(id, value)}
+              required={false}
+            />
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function TargetPicker({
   options,
+  labels,
   directIds,
   groupIds,
   onChange,
   allowGroups,
-  disabled = false,
 }: {
   options: Options;
+  labels: Map<number, string>;
   directIds: number[];
   groupIds: number[];
   onChange: (people: number[], groups: number[]) => void;
   allowGroups: boolean;
-  disabled?: boolean;
 }) {
+  const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const query = search.trim().toLowerCase();
+  const matches = options.members.filter(({ name }) => name.toLowerCase().includes(query));
   const toggle = (ids: number[], id: number) =>
     ids.includes(id) ? ids.filter((n) => n !== id) : [...ids, id];
   const selectedGroups = allowGroups ? options.groups.filter((g) => groupIds.includes(g.id)) : [];
@@ -392,24 +450,68 @@ function TargetPicker({
   const excluded = [...new Map(selectedGroups.flatMap((g) => g.excluded).map((m) => [m.id, m])).values()];
   return (
     <div className="task-target-picker">
-      <fieldset disabled={disabled}>
+      <fieldset>
         <legend>直接指定成员（{directIds.length}）</legend>
-        <div className="task-choice-grid">
-          {options.members.map((m) => (
-            <label key={m.id}>
-              <input
-                type="checkbox"
-                checked={directIds.includes(m.id)}
-                onChange={() => onChange(toggle(directIds, m.id), groupIds)}
-              />
-              {m.name}
-            </label>
-          ))}
-          {!options.members.length && <p>暂无已注册成员。</p>}
-        </div>
+        <label className="task-member-search">
+          <span className="sr-only">搜索成员姓名</span>
+          <Search size={18} aria-hidden="true" />
+          <input
+            ref={searchInput}
+            type="search"
+            value={search}
+            placeholder="输入全名或部分姓名"
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) e.preventDefault();
+            }}
+          />
+        </label>
+        {matches.length > 0 ? (
+          <div className="task-choice-grid task-member-results">
+            {matches.map(({ id }) => (
+              <label key={id}>
+                <input
+                  type="checkbox"
+                  checked={directIds.includes(id)}
+                  onChange={() => onChange(toggle(directIds, id), groupIds)}
+                />
+                <span>{labels.get(id)}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="task-muted task-member-empty" role="status">
+            {options.members.length ? "没有匹配的成员，请换个名字试试。" : "暂无已注册成员。"}
+          </p>
+        )}
+        {directIds.length > 0 && (
+          <div className="task-selected-members">
+            <span>已选成员</span>
+            <ul>
+              {directIds.map((id) => {
+                const name = labels.get(id) ?? "当前不可选的成员";
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      aria-label={`移除${name}`}
+                      onClick={() => {
+                        onChange(directIds.filter((selected) => selected !== id), groupIds);
+                        searchInput.current?.focus();
+                      }}
+                    >
+                      <span>{name}</span>
+                      <X size={15} aria-hidden="true" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </fieldset>
       {allowGroups && (
-        <fieldset disabled={disabled}>
+        <fieldset>
           <legend>指定项目小组（{groupIds.length}）</legend>
           <div className="task-choice-grid">
             {options.groups.map((g) => (
@@ -462,6 +564,8 @@ function TaskForm({
   const [capacity, setCapacity] = useState(initial?.capacity?.toString() ?? "");
   const [directIds, setDirectIds] = useState(initial?.directIds ?? []);
   const [groupIds, setGroupIds] = useState(initial?.groupIds ?? []);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>({});
+  const labels = memberLabels(options.members);
   const [files, setFiles] = useState(initialFiles);
   const [error, setError] = useState("");
   async function submit(e: FormEvent) {
@@ -479,11 +583,24 @@ function TaskForm({
         directIds,
         groupIds: kind === "assigned" ? groupIds : [],
         fileIds: files.map((f) => f.id),
+        personalAssignments: assignmentsForSave(directIds, assignmentDrafts),
       });
     } catch (e) {
       setError((e as Error).message);
     }
   }
+  const materials = (
+    <div className="task-materials">
+      <span className="task-field-label">任务资料</span>
+      <small>发布后，成员可在任务详情预览或下载参考资料；Office 文件需下载查看。</small>
+      <FilePicker
+        files={files}
+        onChange={setFiles}
+        onUploading={setUploading}
+        disabled={saving}
+      />
+    </div>
+  );
   return (
     <form className={`task-form${initial ? "" : " task-publish-form"}`} onSubmit={submit}>
       <fieldset disabled={saving}>
@@ -500,16 +617,7 @@ function TaskForm({
             />
           </label>
           <TaskMarkdownEditor value={description} onChange={setDescription} />
-          <div className="task-materials">
-            <span className="task-field-label">任务资料</span>
-            <small>发布后，成员可在任务详情预览或下载参考资料；Office 文件需下载查看。</small>
-            <FilePicker
-              files={files}
-              onChange={setFiles}
-              onUploading={setUploading}
-              disabled={saving}
-            />
-          </div>
+          {initial && materials}
         </section>
         <section className="task-form-section task-arrangement-fields">
           {!initial && <h2>执行安排</h2>}
@@ -556,6 +664,7 @@ function TaskForm({
           {!initial && (
             <TargetPicker
               options={options}
+              labels={labels}
               directIds={directIds}
               groupIds={groupIds}
               allowGroups={kind === "assigned"}
@@ -566,6 +675,17 @@ function TaskForm({
             />
           )}
         </section>
+        {!initial && (
+          <>
+            <PersonalAssignmentEditors
+              ids={directIds}
+              labels={labels}
+              drafts={assignmentDrafts}
+              onChange={(id, value) => setAssignmentDrafts((drafts) => ({ ...drafts, [id]: value }))}
+            />
+            {materials}
+          </>
+        )}
         <div className="task-form-footer">
           {error && (
             <p className="task-error" role="alert">
@@ -813,6 +933,13 @@ export function TaskDetailView({
   const members = data.members.filter((p) => p.roundId === r.id);
   const active = members.filter((p) => p.active);
   const own = active.find((p) => p.studentId === person.studentId);
+  const personalAssignments = r.personalAssignments ?? [];
+  const namedAssignments = personalAssignments
+    .map((assignment) => ({
+      ...assignment,
+      name: members.find((p) => p.studentId === assignment.studentId)?.name ?? "成员",
+    }))
+    .sort((a, b) => Number(b.studentId === person.studentId) - Number(a.studentId === person.studentId));
   const publisher = data.publisherId === person.studentId;
   const submissions = data.submissions.filter((s) => s.roundId === r.id);
   const latest = submissions.filter(
@@ -969,8 +1096,22 @@ export function TaskDetailView({
       </div>
       <div className="task-detail-grid">
         <section className="panel task-requirements">
-          <h2>任务要求</h2>
+          <h2>共同要求</h2>
           <TaskMarkdown text={r.description} />
+          {namedAssignments.length > 0 && (
+            <section className="task-personal-read">
+              <h3>个人分工</h3>
+              {namedAssignments.map(({ studentId, name, description }) => (
+                <article className={`task-personal-card${studentId === person.studentId ? " task-personal-card-own" : ""}`} key={studentId}>
+                  <header>
+                    <h4>{name}</h4>
+                    {studentId === person.studentId && <small>我的分工</small>}
+                  </header>
+                  <TaskMarkdown text={description} />
+                </article>
+              ))}
+            </section>
+          )}
           <Files ids={r.fileIds} files={data.files} preview />
           {r.deadline && Date.parse(r.deadline) < now && ongoing && (
             <p className="task-overdue">已逾期，仍可提交，由发布者决定验收。</p>
@@ -1195,7 +1336,7 @@ export function TaskDetailView({
         </TaskModal>
       )}
       {modal === "targets" && (
-        <TaskModal title="调整执行对象" onClose={() => setModal(null)}>
+        <TaskModal title="调整执行对象" wide onClose={() => setModal(null)}>
           <TargetForm
             options={options}
             directIds={
@@ -1204,16 +1345,18 @@ export function TaskDetailView({
                 : r.directIds
             }
             groupIds={r.groupIds}
+            personalAssignments={personalAssignments}
             capacity={r.capacity}
             assigned={data.kind === "assigned"}
             busy={busy}
-            onSave={(directIds, groupIds, capacity) =>
+            onSave={(directIds, groupIds, capacity, personalAssignments) =>
               command({
                 action: "targets",
                 expectedRevision: data.revision,
                 directIds,
                 groupIds,
                 capacity,
+                personalAssignments,
               })
             }
           />
@@ -1265,6 +1408,7 @@ function EventDetail({
     version: "版本",
     previousRound: "上一轮",
     members: "执行成员",
+    personalAssignments: "个人分工",
     groupNames: "项目小组",
     deadline: "截止时间",
     capacity: "人数上限",
@@ -1280,6 +1424,17 @@ function EventDetail({
             <Files key={key} ids={value as string[]} files={files} preview={materials} />
           ) : key === "description" && typeof value === "string" ? (
             <div key={key}><strong>{labels[key]}</strong><TaskMarkdown text={value} /></div>
+          ) : key === "personalAssignments" && Array.isArray(value) ? (
+            <div key={key} className="task-event-assignments">
+              <strong>{labels[key]}</strong>
+              {value.length === 0 && <p className="task-muted">无</p>}
+              {value.map((assignment) => (
+                <div key={assignment.studentId}>
+                  <strong>{assignment.name}</strong>
+                  <TaskMarkdown text={assignment.description} />
+                </div>
+              ))}
+            </div>
           ) : (
             <div key={key}>
               <strong>{labels[key]}</strong>
@@ -1472,6 +1627,7 @@ function TargetForm({
   options,
   directIds,
   groupIds,
+  personalAssignments,
   capacity,
   assigned,
   busy,
@@ -1480,59 +1636,76 @@ function TargetForm({
   options: Options;
   directIds: number[];
   groupIds: number[];
+  personalAssignments: PersonalAssignment[];
   capacity: number | null;
   assigned: boolean;
   busy: boolean;
-  onSave: (p: number[], g: number[], c: number | null) => Promise<void>;
+  onSave: (p: number[], g: number[], c: number | null, assignments: PersonalAssignment[]) => Promise<void>;
 }) {
   const [people, setPeople] = useState(directIds);
   const [gs, setGs] = useState(groupIds);
   const [cap, setCap] = useState(capacity?.toString() ?? "");
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>(
+    () => Object.fromEntries(personalAssignments.map(({ studentId, description }) => [studentId, description])),
+  );
   const [error, setError] = useState("");
+  const labels = memberLabels(options.members);
   return (
     <form
-      className="task-form"
+      className="task-form task-target-form"
       onSubmit={async (e) => {
         e.preventDefault();
+        setError("");
         try {
-          await onSave(people, gs, assigned || !cap ? null : Number(cap));
+          await onSave(people, gs, assigned || !cap ? null : Number(cap), assignmentsForSave(people, assignmentDrafts));
         } catch (e) {
           setError((e as Error).message);
         }
       }}
     >
-      <TargetPicker
-        options={options}
-        directIds={people}
-        groupIds={gs}
-        allowGroups={assigned}
-        disabled={busy}
-        onChange={(p, g) => {
-          setPeople(p);
-          setGs(g);
-        }}
-      />
-      {!assigned && (
-        <label>
-          人数上限（留空不限）
-          <input
-            type="number"
-            min={1}
-            max={1000}
-            value={cap}
-            disabled={busy}
-            onChange={(e) => setCap(e.target.value)}
+      <fieldset disabled={busy}>
+        <div className="task-target-controls">
+          {!assigned && (
+            <label>
+              人数上限（留空不限）
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={cap}
+                onChange={(e) => setCap(e.target.value)}
+              />
+            </label>
+          )}
+          <TargetPicker
+            options={options}
+            labels={labels}
+            directIds={people}
+            groupIds={gs}
+            allowGroups={assigned}
+            onChange={(p, g) => {
+              setPeople(p);
+              setGs(g);
+            }}
           />
-        </label>
-      )}
-      {error && (
-        <p className="task-error" role="alert">
-          {error}
-        </p>
-      )}
-      <button className="button primary" disabled={busy}>
-        保存执行对象
-      </button>
+        </div>
+        <PersonalAssignmentEditors
+          ids={people}
+          labels={labels}
+          drafts={assignmentDrafts}
+          onChange={(id, value) => setAssignmentDrafts((drafts) => ({ ...drafts, [id]: value }))}
+        />
+        <div className="task-form-footer">
+          {error && (
+            <p className="task-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="button primary" type="submit" disabled={busy}>
+            保存执行对象
+          </button>
+        </div>
+      </fieldset>
     </form>
   );
 }

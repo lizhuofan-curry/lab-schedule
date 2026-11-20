@@ -10,6 +10,20 @@ const fileIds = z
   .max(5, "最多上传5个附件。")
   .refine((a) => new Set(a).size === a.length, "附件不能重复。");
 const deadline = z.string().datetime({ offset: true }).nullable();
+const personalAssignments = z
+  .array(z.object({
+    studentId: id,
+    description: z.string()
+      .trim()
+      .min(1, "请填写个人分工或留空。")
+      .max(20000, "每份个人分工最多20000字。"),
+  }).strict())
+  .max(200)
+  .refine(
+    (entries) => new Set(entries.map((entry) => entry.studentId)).size === entries.length,
+    "每位成员只能填写一份个人分工。",
+  )
+  .optional();
 const content = {
   title: z
     .string()
@@ -28,6 +42,7 @@ export const taskCreateSchema = z
     delivery: z.enum(["shared", "individual"]),
     directIds: ids,
     groupIds: ids,
+    personalAssignments,
   })
   .strict()
   .refine(
@@ -52,6 +67,7 @@ export const taskCommandSchema = z.discriminatedUnion("action", [
       directIds: ids,
       groupIds: ids,
       capacity: content.capacity,
+      personalAssignments,
     })
     .strict(),
   z.object({ action: z.literal("claim") }).strict(),
