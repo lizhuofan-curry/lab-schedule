@@ -84,12 +84,14 @@ export function TaskModal({
   title,
   onClose,
   children,
-  wide = false,
+  editing = false,
+  busy = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
-  wide?: boolean;
+  editing?: boolean;
+  busy?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -101,17 +103,18 @@ export function TaskModal({
   }, []);
   return (
     <dialog
-      className={wide ? "task-dialog task-target-dialog" : "task-dialog"}
+      className={editing ? "task-dialog task-edit-dialog" : "task-dialog"}
       ref={ref}
       onCancel={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
-        onClose();
+        if (!busy) onClose();
       }}
       aria-label={title}
     >
       <header>
         <h2>{title}</h2>
-        <button className="icon-button" onClick={onClose} aria-label="关闭">
+        <button type="button" className="icon-button" onClick={onClose} aria-label="关闭" disabled={busy}>
           <X size={20} />
         </button>
       </header>
@@ -249,6 +252,7 @@ function FilePicker({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [unbound, setUnbound] = useState<UnboundFile[]>([]);
+  const [unboundUnavailable, setUnboundUnavailable] = useState(false);
   const temporaryIds = useRef(new Set<string>());
   const [hasMore, setHasMore] = useState(false);
   async function refreshUnbound() {
@@ -256,12 +260,13 @@ function FilePicker({
     data.files.forEach((f) => temporaryIds.current.add(f.id));
     setUnbound(data.files);
     setHasMore(data.hasMore);
+    setUnboundUnavailable(false);
   }
   useEffect(() => {
     let mounted = true;
     void taskRequest<{ files: UnboundFile[]; hasMore: boolean }>("/api/task-files").then((data) => {
       if (mounted) { data.files.forEach((f) => temporaryIds.current.add(f.id)); setUnbound(data.files); setHasMore(data.hasMore); }
-    }).catch(() => { if (mounted) setError("未提交附件列表暂不可用，请刷新后重试。"); });
+    }).catch(() => { if (mounted) setUnboundUnavailable(true); });
     return () => { mounted = false; };
   }, []);
   async function remove(f: FileInfo, clean = false) {
@@ -280,6 +285,7 @@ function FilePicker({
           throw new Error(result.message ?? "文件清理失败，请重试。");
       }
       temporaryIds.current.delete(f.id);
+      setUnbound((items) => items.filter((item) => item.id !== f.id));
       onChange(files.filter((other) => other.id !== f.id));
       await refreshUnbound();
     } catch (e) { setError((e as Error).message); }
@@ -337,7 +343,7 @@ function FilePicker({
         />
       </label>
       <small>最多5个，每个10MB；支持PDF、文本、图片和Office文档</small>
-      <small>移除未提交附件会清理文件；已进入任务历史的附件只移除当前引用。</small>
+      {files.length > 0 && <small>移除未提交附件会清理文件，已提交的附件仍可在历史中查看。</small>}
       {files.map((f) => (
         <div className="task-picked-file" key={f.id}>
           <span>{f.name}</span>
@@ -352,9 +358,9 @@ function FilePicker({
           </button>
         </div>
       ))}
-      <details>
+      {(unbound.length > 0 || unboundUnavailable) && <details>
         <summary>本人未提交附件（可清理释放额度）</summary>
-        <small>取消表单后文件仍在此处；清理只删除未提交文件，已进入任务历史的附件保留。</small>
+        {unboundUnavailable && <p className="task-muted">未提交附件列表暂不可用，请刷新后重试。</p>}
         {unbound.map((f) => (
           <div className="task-unbound-file" key={f.id}>
             <span>{f.name} · {(f.size / 1024).toFixed(1)}KB{f.deleting ? " · 清理待重试" : ""}</span>
@@ -362,10 +368,9 @@ function FilePicker({
             <button type="button" className="button secondary" disabled={disabled || loading} aria-label={`清理${f.name}`} onClick={() => void remove(f, true)}>{f.deleting ? "重试清理" : "清理"}</button>
           </div>
         ))}
-        {!unbound.length && <p>暂无未提交附件。</p>}
         {hasMore && <p>仅展示最近50个；清理后刷新可继续处理更早附件。</p>}
-        <button type="button" className="button secondary" disabled={disabled || loading} onClick={() => void refreshUnbound().catch(() => setError("刷新失败，请稍后重试。"))}>刷新未提交附件</button>
-      </details>
+        <button type="button" className="button secondary" disabled={disabled || loading} onClick={() => void refreshUnbound().catch(() => setUnboundUnavailable(true))}>刷新未提交附件</button>
+      </details>}
       {error && (
         <p className="task-error" role="alert">
           {error}
@@ -540,40 +545,72 @@ function TaskForm({
   options,
   initial,
   initialFiles = [],
+  hasSubmissions = false,
   onSave,
   saving,
 }: {
   options: Options;
   initial?: TaskCreate;
   initialFiles?: FileInfo[];
-  onSave: (data: TaskCreate) => Promise<void>;
+  hasSubmissions?: boolean;
+  onSave: (data: TaskCreate, confirmNewRound?: true) => Promise<void>;
   saving: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [kind, setKind] = useState<TaskCreate["kind"]>(
-    initial?.kind ?? "announcement",
-  );
-  const [delivery, setDelivery] = useState<TaskCreate["delivery"]>(
-    initial?.delivery ?? "shared",
-  );
-  const [deadline, setDeadline] = useState(
-    beijingInput(initial?.deadline ?? null),
-  );
+  const [kind, setKind] = useState<TaskCreate["kind"]>(initial?.kind ?? "announcement");
+  const [delivery, setDelivery] = useState<TaskCreate["delivery"]>(initial?.delivery ?? "shared");
+  const [deadline, setDeadline] = useState(beijingInput(initial?.deadline ?? null));
   const [capacity, setCapacity] = useState(initial?.capacity?.toString() ?? "");
   const [directIds, setDirectIds] = useState(initial?.directIds ?? []);
   const [groupIds, setGroupIds] = useState(initial?.groupIds ?? []);
-  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>({});
-  const labels = memberLabels(options.members);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>(
+    () => Object.fromEntries((initial?.personalAssignments ?? []).map(({ studentId, description }) => [studentId, description])),
+  );
   const [files, setFiles] = useState(initialFiles);
   const [error, setError] = useState("");
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (uploading) return;
+  const [pendingSettings, setPendingSettings] = useState<TaskCreate | null>(null);
+  const convertedGroupMembers = useRef<Set<number> | null>(null);
+  const labels = memberLabels(options.members);
+  const SectionHeading = initial ? "h3" : "h2";
+
+  function changeKind(next: TaskCreate["kind"]) {
+    if (next === kind) return;
+    if (initial && next === "announcement") {
+      const groupedIds = options.groups.filter((group) => groupIds.includes(group.id))
+        .flatMap((group) => group.members.map(({ id }) => id));
+      convertedGroupMembers.current = new Set(groupedIds.filter((id) => !directIds.includes(id)));
+      setDirectIds([...new Set([...directIds.filter((id) => labels.has(id)), ...groupedIds])]);
+    } else if (initial && convertedGroupMembers.current) {
+      const converted = convertedGroupMembers.current;
+      // Restore group sources only where they match the member selection in the draft.
+      const retainedGroups = options.groups.filter(({ id, members }) =>
+        groupIds.includes(id) && members.every((member) => directIds.includes(member.id)),
+      );
+      const coveredIds = new Set(retainedGroups.flatMap(({ members }) => members.map(({ id }) => id)));
+      setGroupIds(retainedGroups.map(({ id }) => id));
+      setDirectIds(directIds.filter((id) => !converted.has(id) || !coveredIds.has(id) || assignmentDrafts[id]?.trim()));
+      convertedGroupMembers.current = null;
+    }
+    setKind(next);
+  }
+
+  async function save(fields: TaskCreate, confirmNewRound?: true) {
     setError("");
     try {
-      await onSave({
+      await onSave(fields, confirmNewRound);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (uploading || saving) return;
+    setError("");
+    try {
+      const fields: TaskCreate = {
         title,
         description,
         kind,
@@ -584,124 +621,117 @@ function TaskForm({
         groupIds: kind === "assigned" ? groupIds : [],
         fileIds: files.map((f) => f.id),
         personalAssignments: assignmentsForSave(directIds, assignmentDrafts),
-      });
+      };
+      if (initial && hasSubmissions && (kind !== initial.kind || delivery !== initial.delivery)) {
+        setPendingSettings(fields);
+        return;
+      }
+      await save(fields);
     } catch (e) {
       setError((e as Error).message);
     }
   }
-  const materials = (
-    <div className="task-materials">
-      <span className="task-field-label">任务资料</span>
-      <small>发布后，成员可在任务详情预览或下载参考资料；Office 文件需下载查看。</small>
-      <FilePicker
-        files={files}
-        onChange={setFiles}
-        onUploading={setUploading}
-        disabled={saving}
-      />
-    </div>
-  );
+
   return (
-    <form className={`task-form${initial ? "" : " task-publish-form"}`} onSubmit={submit}>
-      <fieldset disabled={saving}>
-        <section className="task-form-section task-content-fields">
-          {!initial && <h2>任务内容</h2>}
-          <label>
-            任务标题
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={120}
-              required
-              placeholder="例如：完成本周实验结果汇总"
-            />
-          </label>
-          <TaskMarkdownEditor value={description} onChange={setDescription} />
-          {initial && materials}
-        </section>
-        <section className="task-form-section task-arrangement-fields">
-          {!initial && <h2>执行安排</h2>}
-          <div className="task-form-row">
-            <div className="task-field">
-              <span>任务类型</span>
-              <SelectControl
-                value={kind}
-                label="任务类型"
-                disabled={!!initial}
-                onChange={(value) => setKind(value as TaskCreate["kind"])}
-                options={[{ value: "announcement", label: "公告任务 · 自行领取" }, { value: "assigned", label: "指定任务 · 直接安排" }]}
-              />
-            </div>
-            <div className="task-field">
-              <span>交付模式</span>
-              <SelectControl
-                value={delivery}
-                label="交付模式"
-                disabled={!!initial}
-                onChange={(value) =>
-                  setDelivery(value as TaskCreate["delivery"])
-                }
-                options={[{ value: "shared", label: "共同交付一份成果" }, { value: "individual", label: "每人分别交付" }]}
-              />
-            </div>
-          </div>
-          <div className="task-form-row">
-            <TaskDeadline label="截止时间（北京时间，可选）" value={deadline} onChange={setDeadline} />
-            {kind === "announcement" && (
+    <>
+      <form className={`task-form ${initial ? "task-edit-form" : "task-publish-form"}`} onSubmit={submit}>
+        <div className="task-form-scroll">
+          <fieldset className="task-form-layout" disabled={saving}>
+            <section className="task-form-section task-content-fields">
+              <SectionHeading>任务内容</SectionHeading>
               <label>
-                人数上限（留空不限）
+                任务标题
                 <input
-                  type="number"
-                  value={capacity}
-                  min={1}
-                  max={1000}
-                  onChange={(e) => setCapacity(e.target.value)}
-                  placeholder="不限人数"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={120}
+                  required
+                  placeholder="例如：完成本周实验结果汇总"
                 />
               </label>
-            )}
-          </div>
-          {!initial && (
-            <TargetPicker
-              options={options}
-              labels={labels}
-              directIds={directIds}
-              groupIds={groupIds}
-              allowGroups={kind === "assigned"}
-              onChange={(p, g) => {
-                setDirectIds(p);
-                setGroupIds(g);
-              }}
-            />
-          )}
-        </section>
-        {!initial && (
-          <>
+              <TaskMarkdownEditor value={description} onChange={setDescription} />
+            </section>
+            <section className="task-form-section task-arrangement-fields">
+              <SectionHeading>执行安排</SectionHeading>
+              <div className="task-form-row">
+                <div className="task-field">
+                  <span>任务类型</span>
+                  <SelectControl
+                    value={kind}
+                    label="任务类型"
+                    onChange={(value) => changeKind(value as TaskCreate["kind"])}
+                    options={[{ value: "announcement", label: "公告任务 · 自行领取" }, { value: "assigned", label: "指定任务 · 直接安排" }]}
+                  />
+                </div>
+                <div className="task-field">
+                  <span>交付模式</span>
+                  <SelectControl
+                    value={delivery}
+                    label="交付模式"
+                    onChange={(value) => setDelivery(value as TaskCreate["delivery"])}
+                    options={[{ value: "shared", label: "共同交付一份成果" }, { value: "individual", label: "每人分别交付" }]}
+                  />
+                </div>
+              </div>
+              <div className="task-form-row">
+                <TaskDeadline label="截止时间（北京时间，可选）" value={deadline} onChange={setDeadline} />
+                {kind === "announcement" && (
+                  <label>
+                    人数上限（留空不限）
+                    <input
+                      type="number"
+                      value={capacity}
+                      min={1}
+                      max={1000}
+                      onChange={(e) => setCapacity(e.target.value)}
+                      placeholder="不限人数"
+                    />
+                  </label>
+                )}
+              </div>
+              <TargetPicker
+                options={options}
+                labels={labels}
+                directIds={directIds}
+                groupIds={groupIds}
+                allowGroups={kind === "assigned"}
+                onChange={(people, groups) => {
+                  setDirectIds(people);
+                  setGroupIds(groups);
+                }}
+              />
+            </section>
             <PersonalAssignmentEditors
               ids={directIds}
               labels={labels}
               drafts={assignmentDrafts}
               onChange={(id, value) => setAssignmentDrafts((drafts) => ({ ...drafts, [id]: value }))}
             />
-            {materials}
-          </>
-        )}
+            <div className="task-materials">
+              <span className="task-field-label">任务资料</span>
+              <FilePicker files={files} onChange={setFiles} onUploading={setUploading} disabled={saving} />
+            </div>
+          </fieldset>
+        </div>
         <div className="task-form-footer">
-          {error && (
-            <p className="task-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button
-            className="button primary"
-            disabled={saving || uploading}
-            type="submit"
-          >
-            {saving ? "保存中…" : initial ? "保存要求" : "发布任务"}
+          {error && <p className="task-error" role="alert">{error}</p>}
+          <button className="button primary" disabled={saving || uploading} type="submit">
+            {saving ? "保存中…" : initial ? "保存任务" : "发布任务"}
           </button>
         </div>
-      </fieldset>
-    </form>
+      </form>
+      {pendingSettings && (
+        <ConfirmationDialog
+          title="开启新一轮"
+          description="本轮已有提交。保存后将开启新一轮，旧轮的成果和验收记录会保留。执行成员需要按新要求重新提交。"
+          confirmLabel="确认开启新一轮"
+          onConfirm={() => void save(pendingSettings, true)}
+          onClose={() => { setPendingSettings(null); setError(""); }}
+          busy={saving}
+          error={error}
+        />
+      )}
+    </>
   );
 }
 export function TaskListView({
@@ -899,7 +929,7 @@ const actionLabels: Record<string, string> = {
   published: "发布任务",
   members: "执行名单变化",
   claimed: "领取任务",
-  edited: "修改任务要求",
+  edited: "修改任务",
   targets: "调整执行对象",
   claims_closed: "结束领取",
   submitted: "提交成果",
@@ -908,6 +938,7 @@ const actionLabels: Record<string, string> = {
   completed: "任务完成",
   cancelled: "撤销任务",
   reopened: "重新开启",
+  superseded: "本轮已结束",
 };
 export function TaskDetailView({
   initial,
@@ -924,10 +955,12 @@ export function TaskDetailView({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState<
-    "edit" | "targets" | "reopen" | "cancel" | null
+    "edit" | "reopen" | "cancel" | null
   >(null);
   const [selectedRound, setSelectedRound] = useState(initial.currentRound);
   const r = data.rounds.find((r) => r.number === selectedRound)!;
+  const kind = r.kind ?? data.kind;
+  const delivery = r.delivery ?? data.delivery;
   const isCurrent = selectedRound === data.currentRound;
   const ongoing = isCurrent && data.status === "active";
   const members = data.members.filter((p) => p.roundId === r.id);
@@ -949,10 +982,10 @@ export function TaskDetailView({
       ),
   );
   const subjects = active.map((p) =>
-    taskSubject(data.delivery, p.studentId, p.generation),
+    taskSubject(delivery, p.studentId, p.generation),
   );
   const passed =
-    data.delivery === "shared"
+    delivery === "shared"
       ? latest.some((s) => s.subjectKey === "shared" && s.status === "approved")
         ? 1
         : 0
@@ -963,7 +996,7 @@ export function TaskDetailView({
     ? latest.find(
         (s) =>
           s.subjectKey ===
-          taskSubject(data.delivery, person.studentId, own.generation),
+          taskSubject(delivery, person.studentId, own.generation),
       )
     : undefined;
   async function command(body: TaskCommand) {
@@ -991,13 +1024,14 @@ export function TaskDetailView({
   const initialForm: TaskCreate = {
     title: r.title,
     description: r.description,
-    kind: data.kind,
-    delivery: data.delivery,
+    kind,
+    delivery,
     deadline: r.deadline,
     capacity: r.capacity,
-    directIds: r.directIds,
+    directIds: kind === "announcement" ? active.map((member) => member.studentId) : r.directIds,
     groupIds: r.groupIds,
     fileIds: r.fileIds,
+    personalAssignments,
   };
   return (
     <AppShell currentUser={person}>
@@ -1006,16 +1040,15 @@ export function TaskDetailView({
         任务列表
       </Link>
       <PageHeader
-        eyebrow={`${data.publisher}发布 · ${data.kind === "announcement" ? "公告任务" : "指定任务"}`}
+        eyebrow={`${data.publisher}发布 · ${kind === "announcement" ? "公告任务" : "指定任务"}`}
         title={r.title}
-        description={`第${r.number}轮 · ${data.delivery === "shared" ? "共同交付一份成果" : "每人分别交付"} · ${taskDate(r.deadline)}`}
+        description={`第${r.number}轮 · ${delivery === "shared" ? "共同交付一份成果" : "每人分别交付"} · ${taskDate(r.deadline)}`}
         actions={
-          <span className={`task-badge ${data.status}`}>
+          <span className={`task-badge ${isCurrent ? data.status : r.outcome ?? "superseded"}`}>
             {isCurrent
               ? taskStatusLabels[data.status]
-              : r.outcome === "cancelled"
-                ? "本轮已撤销"
-                : "本轮已完成"}
+              : r.outcome === "completed" ? "本轮已完成"
+                : r.outcome === "cancelled" ? "本轮已撤销" : "本轮已结束"}
           </span>
         }
       />
@@ -1054,16 +1087,9 @@ export function TaskDetailView({
                   disabled={busy}
                   onClick={() => setModal("edit")}
                 >
-                  修改要求
+                  修改任务
                 </button>
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() => setModal("targets")}
-                >
-                  调整执行对象
-                </button>
-                {data.kind === "announcement" && r.claimsOpen && (
+                {kind === "announcement" && r.claimsOpen && (
                   <button
                     className="button secondary"
                     disabled={busy}
@@ -1126,7 +1152,7 @@ export function TaskDetailView({
               <small>
                 {" "}
                 /{" "}
-                {data.delivery === "shared"
+                {delivery === "shared"
                   ? active.length
                     ? 1
                     : 0
@@ -1140,7 +1166,7 @@ export function TaskDetailView({
               const s = latest.find(
                 (v) =>
                   v.subjectKey ===
-                  taskSubject(data.delivery, p.studentId, p.generation),
+                  taskSubject(delivery, p.studentId, p.generation),
               );
               return (
                 <div key={p.id}>
@@ -1172,14 +1198,14 @@ export function TaskDetailView({
               </p>
             </details>
           )}
-          {data.kind === "announcement" && (
+          {kind === "announcement" && (
             <p className="task-muted">
               {r.claimsOpen
                 ? `领取开放 · ${r.capacity ?? "不限"}人${r.capacity && active.length >= r.capacity ? " · 名额已满" : ""}`
                 : "领取已结束"}
             </p>
           )}
-          {ongoing && data.kind === "announcement" && r.claimsOpen && !own && (
+          {ongoing && kind === "announcement" && r.claimsOpen && !own && (
             <button
               className="button primary"
               disabled={
@@ -1199,7 +1225,7 @@ export function TaskDetailView({
         <section className="panel task-section">
           <h2>{ownLatest ? "重新提交成果" : "提交成果"}</h2>
           <p className="task-muted">
-            {data.delivery === "shared"
+            {delivery === "shared"
               ? "任意执行成员可提交共同成果，重提会生成新版，请先确认当前版本。"
               : "提交你自己的成果，所有当前执行成员分别验收通过后才能完成。"}
           </p>
@@ -1236,7 +1262,7 @@ export function TaskDetailView({
         {submissions.map((s) => {
           const isLatest = latest.some((v) => v.id === s.id);
           const currentSubject =
-            data.delivery === "shared" || subjects.includes(s.subjectKey);
+            delivery === "shared" || subjects.includes(s.subjectKey);
           const reviewable =
             publisher &&
             ongoing &&
@@ -1248,7 +1274,7 @@ export function TaskDetailView({
               <header>
                 <div>
                   <strong>
-                    {data.delivery === "shared" ? "共同成果" : s.authorName} ·
+                    {delivery === "shared" ? "共同成果" : s.authorName} ·
                     第{s.version}版
                   </strong>
                   <small>
@@ -1315,57 +1341,26 @@ export function TaskDetailView({
         </div>
       </section>
       {modal === "edit" && (
-        <TaskModal title="修改任务要求" onClose={() => setModal(null)}>
+        <TaskModal title="修改任务" editing busy={busy} onClose={() => setModal(null)}>
           <TaskForm
             options={options}
             initial={initialForm}
             initialFiles={data.files.filter((f) => r.fileIds.includes(f.id))}
+            hasSubmissions={submissions.length > 0}
             saving={busy}
-            onSave={(v) =>
-              command({
-                action: "edit",
-                expectedRevision: data.revision,
-                title: v.title,
-                description: v.description,
-                deadline: v.deadline,
-                capacity: v.capacity,
-                fileIds: v.fileIds,
-              })
-            }
-          />
-        </TaskModal>
-      )}
-      {modal === "targets" && (
-        <TaskModal title="调整执行对象" wide onClose={() => setModal(null)}>
-          <TargetForm
-            options={options}
-            directIds={
-              data.kind === "announcement"
-                ? active.map((p) => p.studentId)
-                : r.directIds
-            }
-            groupIds={r.groupIds}
-            personalAssignments={personalAssignments}
-            capacity={r.capacity}
-            assigned={data.kind === "assigned"}
-            busy={busy}
-            onSave={(directIds, groupIds, capacity, personalAssignments) =>
-              command({
-                action: "targets",
-                expectedRevision: data.revision,
-                directIds,
-                groupIds,
-                capacity,
-                personalAssignments,
-              })
-            }
+            onSave={(fields, confirmNewRound) => command({
+              action: "update",
+              expectedRevision: data.revision,
+              ...fields,
+              confirmNewRound,
+            })}
           />
         </TaskModal>
       )}
       {modal === "reopen" && (
         <TaskModal title="重新开启任务" onClose={() => setModal(null)}>
           <ReopenForm
-            announcement={data.kind === "announcement"}
+            announcement={kind === "announcement"}
             deadline={r.deadline}
             busy={busy}
             onSave={(claimsOpen, deadline) =>
@@ -1407,6 +1402,9 @@ function EventDetail({
     name: "成员",
     version: "版本",
     previousRound: "上一轮",
+    nextRound: "新一轮",
+    kind: "任务类型",
+    delivery: "交付模式",
     members: "执行成员",
     personalAssignments: "个人分工",
     groupNames: "项目小组",
@@ -1414,6 +1412,12 @@ function EventDetail({
     capacity: "人数上限",
     claimsOpen: "公告领取",
     number: "轮次",
+  };
+  const settingLabels: Record<string, string> = {
+    announcement: "公告任务",
+    assigned: "指定任务",
+    shared: "共同交付",
+    individual: "逐人交付",
   };
   return (
     <div className="task-event-detail">
@@ -1449,8 +1453,10 @@ function EventDetail({
                 />
               ) : (
                 <p className="task-body">
-                  {key === "deadline"
-                    ? taskDate(value as string | null)
+                  {(key === "kind" || key === "delivery") && typeof value === "string"
+                    ? settingLabels[value] ?? value
+                    : key === "deadline"
+                      ? taskDate(value as string | null)
                     : key === "capacity" && value === null
                       ? "不限人数"
                       : key === "claimsOpen"
@@ -1621,92 +1627,6 @@ function ReviewForm({
         </p>
       )}
     </div>
-  );
-}
-function TargetForm({
-  options,
-  directIds,
-  groupIds,
-  personalAssignments,
-  capacity,
-  assigned,
-  busy,
-  onSave,
-}: {
-  options: Options;
-  directIds: number[];
-  groupIds: number[];
-  personalAssignments: PersonalAssignment[];
-  capacity: number | null;
-  assigned: boolean;
-  busy: boolean;
-  onSave: (p: number[], g: number[], c: number | null, assignments: PersonalAssignment[]) => Promise<void>;
-}) {
-  const [people, setPeople] = useState(directIds);
-  const [gs, setGs] = useState(groupIds);
-  const [cap, setCap] = useState(capacity?.toString() ?? "");
-  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>(
-    () => Object.fromEntries(personalAssignments.map(({ studentId, description }) => [studentId, description])),
-  );
-  const [error, setError] = useState("");
-  const labels = memberLabels(options.members);
-  return (
-    <form
-      className="task-form task-target-form"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setError("");
-        try {
-          await onSave(people, gs, assigned || !cap ? null : Number(cap), assignmentsForSave(people, assignmentDrafts));
-        } catch (e) {
-          setError((e as Error).message);
-        }
-      }}
-    >
-      <fieldset disabled={busy}>
-        <div className="task-target-controls">
-          {!assigned && (
-            <label>
-              人数上限（留空不限）
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={cap}
-                onChange={(e) => setCap(e.target.value)}
-              />
-            </label>
-          )}
-          <TargetPicker
-            options={options}
-            labels={labels}
-            directIds={people}
-            groupIds={gs}
-            allowGroups={assigned}
-            onChange={(p, g) => {
-              setPeople(p);
-              setGs(g);
-            }}
-          />
-        </div>
-        <PersonalAssignmentEditors
-          ids={people}
-          labels={labels}
-          drafts={assignmentDrafts}
-          onChange={(id, value) => setAssignmentDrafts((drafts) => ({ ...drafts, [id]: value }))}
-        />
-        <div className="task-form-footer">
-          {error && (
-            <p className="task-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="button primary" type="submit" disabled={busy}>
-            保存执行对象
-          </button>
-        </div>
-      </fieldset>
-    </form>
   );
 }
 function ReopenForm({

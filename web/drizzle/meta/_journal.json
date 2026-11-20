@@ -99,6 +99,13 @@
       "when": 1795169751490,
       "tag": "0013_task_personal_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795177129262,
+      "tag": "0014_task_edit_round_settings",
+      "breakpoints": true
     }
   ]
 }

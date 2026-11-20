@@ -8,6 +8,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  or,
   sql,
 } from "drizzle-orm";
 import { db } from "@/db";
@@ -32,6 +33,7 @@ import { taskIsComplete, taskSubject } from "./task-rules";
 type Task = typeof collabTasks.$inferSelect;
 type Round = typeof taskRounds.$inferSelect;
 type PersonalAssignments = Round["personalAssignments"];
+type Participant = typeof taskParticipants.$inferSelect;
 export class TaskError extends Error {
   constructor(
     public code: string,
@@ -215,6 +217,43 @@ function changedAssignmentIds(before: PersonalAssignments, after: PersonalAssign
     [...oldText.keys(), ...newText.keys()].filter((id) => oldText.get(id) !== newText.get(id)),
   );
 }
+async function adjustParticipants(
+  tx: TaskTx,
+  round: Round,
+  before: Participant[],
+  desired: { id: number; name: string }[],
+) {
+  const desiredIds = new Set(desired.map((s) => s.id));
+  const previous = new Map(before.map((p) => [p.studentId, p]));
+  const removed = before.filter(
+    (p) => p.active && !desiredIds.has(p.studentId),
+  );
+  const added = desired.filter((s) => !previous.get(s.id)?.active);
+  if (removed.length)
+    await tx
+      .update(taskParticipants)
+      .set({ active: false, removedAt: new Date() })
+      .where(inArray(taskParticipants.id, removed.map(({ id }) => id)));
+  for (const s of added) {
+    const existing = previous.get(s.id);
+    if (existing)
+      await tx
+        .update(taskParticipants)
+        .set({
+          active: true,
+          generation: existing.generation + 1,
+          name: s.name,
+          joinedAt: new Date(),
+          removedAt: null,
+        })
+        .where(eq(taskParticipants.id, existing.id));
+    else
+      await tx
+        .insert(taskParticipants)
+        .values({ roundId: round.id, studentId: s.id, name: s.name });
+  }
+  return { added, removed };
+}
 async function reconcile(
   tx: TaskTx,
   task: Task,
@@ -235,36 +274,7 @@ async function reconcile(
             .where(and(eq(students.enabled, true), isNotNull(students.userId)))
         ).filter((s) => before.some((p) => p.active && p.studentId === s.id))
   );
-  const desiredIds = new Set(desired.map((s) => s.id));
-  const removed = before.filter(
-    (p) => p.active && !desiredIds.has(p.studentId),
-  );
-  const added = desired.filter(
-    (s) => !before.some((p) => p.active && p.studentId === s.id),
-  );
-  for (const p of removed)
-    await tx
-      .update(taskParticipants)
-      .set({ active: false, removedAt: new Date() })
-      .where(eq(taskParticipants.id, p.id));
-  for (const s of added) {
-    const existing = before.find((p) => p.studentId === s.id);
-    if (existing)
-      await tx
-        .update(taskParticipants)
-        .set({
-          active: true,
-          generation: existing.generation + 1,
-          name: s.name,
-          joinedAt: new Date(),
-          removedAt: null,
-        })
-        .where(eq(taskParticipants.id, existing.id));
-    else
-      await tx
-        .insert(taskParticipants)
-        .values({ roundId: round.id, studentId: s.id, name: s.name });
-  }
+  const { added, removed } = await adjustParticipants(tx, round, before, desired);
   if (removed.length || added.length) {
     const removedIds = new Set(removed.map((p) => p.studentId));
     const removedAssignments = round.personalAssignments.filter(({ studentId }) =>
@@ -418,6 +428,135 @@ async function bindFiles(
     fail("INVALID_FILE", "附件不存在或不属于本次任务，请重新上传。");
   await tx.update(taskFiles).set({ taskId }).where(inArray(taskFiles.id, ids));
 }
+function roundRequirements(round: Round) {
+  return {
+    title: round.title,
+    description: round.description,
+    deadline: round.deadline,
+    capacity: round.capacity,
+    fileIds: round.fileIds,
+    claimsOpen: round.claimsOpen,
+  };
+}
+async function updateTask(
+  tx: TaskTx,
+  task: Task,
+  round: Round,
+  command: Extract<TaskCommand, { action: "update" }>,
+  actor: CurrentMember,
+) {
+  const { kind, delivery, capacity, groupIds } = command;
+  const kindChanged = task.kind !== kind;
+  const settingsChanged = kindChanged || task.delivery !== delivery;
+  if (kind === "announcement" && groupIds.length)
+    fail("INVALID_TARGET", "公告任务只能选择个人，请移除目标小组。");
+  if (kind === "assigned" && capacity !== null)
+    fail("INVALID_TASK", "指定任务不能设置人数上限，请清空人数上限。");
+
+  const existing = await participants(tx, round.id);
+  const active = existing.filter((p) => p.active);
+  const activeIds = new Set(active.map((p) => p.studentId));
+  const previousDirectIds = new Set(round.directIds);
+  const targets = await resolveTargets(tx, command.directIds, groupIds, false);
+  const targetIds = new Set(targets.members.map(({ id }) => id));
+  const preservingAssignedTargets = kind === "assigned" && !kindChanged;
+  if (command.directIds.some((id) => !targetIds.has(id) && !(preservingAssignedTargets && previousDirectIds.has(id))))
+    fail("INVALID_TARGET", "部分成员尚未注册或已停用，请重新选择。");
+  if (groupIds.some((id) => !Object.hasOwn(targets.groupNames, id) && !(preservingAssignedTargets && round.groupIds.includes(id))))
+    fail("INVALID_TARGET", "部分小组已解散，请重新选择。");
+  if (kindChanged && kind === "assigned" && !targets.members.length)
+    fail("INVALID_TARGET", "改为指定任务前，请选择可执行的成员或小组。");
+  if (capacity !== null && targets.members.length > capacity)
+    fail("CLAIM_FULL", "执行人数超过上限，请先调高上限。", 409);
+
+  const selectedIds = new Set(command.directIds.filter((id) => targetIds.has(id)));
+  const personalAssignments = resolvePersonalAssignments(selectedIds, command.personalAssignments, round.personalAssignments);
+  const groupNames = Object.fromEntries(groupIds.map((id) => [String(id), targets.groupNames[id] ?? round.groupNames[id]]).filter(([, name]) => name !== undefined));
+  const directIds = kind === "announcement" && !kindChanged
+    // Active claimants appear in the selection while retaining their original source.
+    ? command.directIds.filter((id) => previousDirectIds.has(id) || !activeIds.has(id))
+    : command.directIds;
+  const values = {
+    kind, delivery, directIds, groupIds, groupNames, personalAssignments,
+    title: command.title,
+    description: command.description,
+    deadline: command.deadline ? new Date(command.deadline) : null,
+    capacity,
+    fileIds: command.fileIds,
+    claimsOpen: kind === "announcement" && (kindChanged || round.claimsOpen),
+  };
+
+  const firstSubmission = settingsChanged ? await tx.select({ id: taskSubmissions.id })
+    .from(taskSubmissions).where(eq(taskSubmissions.roundId, round.id)).limit(1) : [];
+  const startsNewRound = firstSubmission.length > 0;
+  if (startsNewRound && !command.confirmNewRound)
+    fail("CONFIRM_NEW_ROUND", "本轮已有成果。请确认开启新一轮后再保存变更。", 409);
+  await bindFiles(tx, values.fileIds, actor, task.id);
+  if (settingsChanged) {
+    // Older application versions can leave snapshots empty. Record their configuration before changing it.
+    await tx.update(taskRounds).set({
+      kind: sql`coalesce(${taskRounds.kind}, ${task.kind})`,
+      delivery: sql`coalesce(${taskRounds.delivery}, ${task.delivery})`,
+    }).where(and(eq(taskRounds.taskId, task.id), or(isNull(taskRounds.kind), isNull(taskRounds.delivery))));
+  }
+
+  let updatedRound: Round;
+  let newParticipants: { id: number; name: string }[];
+  let removedParticipants: Participant[];
+  if (startsNewRound) {
+    await tx.update(taskRounds).set({ claimsOpen: false, endedAt: new Date(), outcome: "superseded" })
+      .where(eq(taskRounds.id, round.id));
+    [updatedRound] = await tx.insert(taskRounds)
+      .values({ ...values, taskId: task.id, number: round.number + 1 }).returning();
+    newParticipants = targets.members;
+    removedParticipants = active.filter((p) => !targetIds.has(p.studentId));
+    if (newParticipants.length)
+      await tx.insert(taskParticipants).values(newParticipants.map(({ id, name }) => ({
+        studentId: id, name, roundId: updatedRound.id,
+      })));
+    await event(tx, task, round, actor, "superseded", { nextRound: updatedRound.number });
+  } else {
+    [updatedRound] = await tx.update(taskRounds).set(values)
+      .where(eq(taskRounds.id, round.id)).returning();
+    const { added, removed } = await adjustParticipants(tx, updatedRound, existing, targets.members);
+    newParticipants = added;
+    removedParticipants = removed;
+    await retireAssignments(tx, round.id, removed.map((p) => p.studentId));
+  }
+  const [updatedTask] = await tx.update(collabTasks).set({
+    kind, delivery, currentRound: updatedRound.number, revision: task.revision + 1, updatedAt: new Date(),
+  }).where(eq(collabTasks.id, task.id)).returning();
+
+  const changedIds = changedAssignmentIds(round.personalAssignments, updatedRound.personalAssignments);
+  const beforeMembers = active.map((p) => ({ id: p.studentId, name: p.name }));
+  const before = roundRequirements(round);
+  const after = roundRequirements(updatedRound);
+  await event(tx, updatedTask, updatedRound, actor, "edited", {
+    ...(startsNewRound ? { previousRound: round.number } : {}),
+    before: {
+      ...before, kind: task.kind, delivery: task.delivery, groupNames: round.groupNames, members: beforeMembers,
+      ...(changedIds.size ? { personalAssignments: assignmentSnapshot(round.personalAssignments.filter(({ studentId }) => changedIds.has(studentId)), beforeMembers) } : {}),
+    },
+    after: {
+      ...after, kind, delivery, groupNames, members: targets.members, excluded: targets.excluded,
+      ...(changedIds.size ? { personalAssignments: assignmentSnapshot(personalAssignments.filter(({ studentId }) => changedIds.has(studentId)), targets.members) } : {}),
+    },
+  });
+  await notify(tx, updatedTask, updatedRound, newParticipants.map(({ id }) => id), startsNewRound
+    ? "发布者开启了新一轮，请查看本轮要求并重新提交成果。"
+    : "你被加入任务，请查看任务要求。", true);
+  await notify(tx, updatedTask, startsNewRound ? round : updatedRound, removedParticipants.map((p) => p.studentId), startsNewRound
+    ? "任务已开启新一轮。你在原轮次的成果保留在历史中。"
+    : "发布者将你移出了任务，已有成果保留为历史。");
+  if (!startsNewRound) {
+    const commonChanged = settingsChanged || JSON.stringify(before) !== JSON.stringify(after);
+    await notify(tx, updatedTask, updatedRound, targets.members
+      .filter(({ id }) => activeIds.has(id) && (commonChanged || changedIds.has(id))).map(({ id }) => id),
+    commonChanged ? "发布者更新了任务要求，请查看变更记录。" : "发布者更新了你的个人分工，请查看任务详情。");
+    await completeIfReady(tx, updatedTask, updatedRound);
+  }
+  return { id: task.id, memberCount: targets.members.length, excluded: targets.excluded };
+}
 export async function createTask(input: TaskCreate, actor: CurrentMember) {
   return db.transaction(async (tx) => {
     await lockTaskGraph(tx);
@@ -449,6 +588,8 @@ export async function createTask(input: TaskCreate, actor: CurrentMember) {
       .values({
         taskId: task.id,
         number: 1,
+        kind: task.kind,
+        delivery: task.delivery,
         title: input.title,
         description: input.description,
         personalAssignments,
@@ -550,6 +691,8 @@ export async function commandTask(
         .values({
           taskId: id,
           number: task.currentRound + 1,
+          kind: task.kind,
+          delivery: task.delivery,
           title: round.title,
           description: round.description,
           personalAssignments,
@@ -617,6 +760,8 @@ export async function commandTask(
     }
     if (task.status !== "active")
       fail("TASK_CLOSED", "本轮任务已结束，发布者重新开启后才能继续。", 409);
+    if (command.action === "update")
+      return updateTask(tx, task, round, command, actor);
     const active = (await participants(tx, round.id)).filter((p) => p.active);
     if (command.action === "claim") {
       if (task.kind !== "announcement" || !round.claimsOpen)
@@ -1055,7 +1200,7 @@ export async function taskDetail(id: number) {
       ...task,
       publisher: publisher.name,
       targetExclusions: task.status === "active" && task.kind === "assigned" ? (await resolveTargets(tx, currentRound.directIds, currentRound.groupIds, false)).excluded : [],
-      rounds,
+      rounds: rounds.map((r) => ({ ...r, kind: r.kind ?? task.kind, delivery: r.delivery ?? task.delivery })),
       members,
       submissions,
       events,

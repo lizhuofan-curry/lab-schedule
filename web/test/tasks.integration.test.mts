@@ -446,6 +446,96 @@ test("公开任务给主动领取者补分工保留参与记录、领取来源�
   assert.deepEqual(d.events.filter((event) => event.action === "claimed"), [claim]);
   assert.ok(!(await notifications(c)).assignments.some((message) => message.taskId === id));
 });
+
+test("统一修改在未提交时原轮次切换类型、交付和名单，失败整体回滚", async () => {
+  const { id } = await createTask(input({ kind: "announcement", delivery: "shared", capacity: 3 }), a);
+  await commandTask(id, { action: "claim" }, c);
+  const before = await detail(id);
+  const retainedClaim = before.members.find((p) => p.studentId === c.studentId);
+  const file = await uploadTaskFile(new File(["修改后的资料"], "update.txt"), a);
+  const update = {
+    action: "update",
+    expectedRevision: before.revision,
+    ...input({ title: "统一修改后的标题", description: "统一修改后的要求" }),
+    directIds: [b.studentId, c.studentId],
+    personalAssignments: [{ studentId: c.studentId, description: "续做实验" }],
+    fileIds: [file.id],
+  };
+  const post = (actor: Actor, body: unknown) => detailRoute.POST(new Request(`${origin}/api/tasks/${id}`, {
+    method: "POST",
+    headers: { origin, cookie: cookies[actor.studentNo], "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }), { params: Promise.resolve({ id: String(id) }) });
+  assert.equal((await post(b, update)).status, 403);
+  const invalidFile = await post(a, { ...update, fileIds: [file.id, randomUUID()] });
+  assert.equal(invalidFile.status, 422);
+  assert.deepEqual(await detail(id), before);
+  assert.ok((await unboundFiles(a)).files.some((item) => item.id === file.id));
+
+  assert.equal((await post(a, update)).status, 200);
+  const after = await detail(id);
+  assert.equal(after.currentRound, 1);
+  assert.equal(after.kind, "assigned");
+  assert.equal(after.delivery, "individual");
+  assert.equal(after.rounds[0].id, before.rounds[0].id);
+  assert.equal(after.rounds[0].title, update.title);
+  assert.equal(after.rounds[0].description, update.description);
+  assert.equal(after.rounds[0].claimsOpen, false);
+  assert.deepEqual(after.rounds[0].directIds, update.directIds);
+  assert.deepEqual(after.rounds[0].personalAssignments, update.personalAssignments);
+  assert.deepEqual(after.rounds[0].fileIds, [file.id]);
+  assert.deepEqual(after.members.find((p) => p.studentId === c.studentId), retainedClaim);
+  assert.ok(after.events.some((e) => e.action === "claimed"));
+  assert.equal((await post(a, update)).status, 409);
+  await assert.rejects(commandTask(id, { action: "claim" }, c), errorCode("CLAIM_CLOSED"));
+  assert.equal((await post(a, {
+    ...update, expectedRevision: after.revision, kind: "announcement", capacity: 3,
+  })).status, 200);
+  const open = await detail(id);
+  assert.equal(open.rounds[0].id, before.rounds[0].id);
+  assert.equal(open.rounds[0].claimsOpen, true);
+  assert.deepEqual(open.members.find((p) => p.studentId === c.studentId), retainedClaim);
+});
+
+test("已有已验收成果切换配置需确认，旧轮和成果完整保留，新轮按新方式提交", async () => {
+  const { id } = await createTask(input({ kind: "announcement", delivery: "shared" }), a);
+  await commandTask(id, { action: "claim" }, c);
+  await submit(id, b, "旧共同成果");
+  await approve(id);
+  const before = await detail(id);
+  const oldRound = before.rounds[0];
+  const update = {
+    ...input(),
+    action: "update" as const,
+    expectedRevision: before.revision,
+    directIds: [b.studentId, c.studentId],
+    personalAssignments: [{ studentId: c.studentId, description: "新一轮单独提交" }],
+  } as Parameters<typeof commandTask>[1] & { action: "update" };
+  await assert.rejects(commandTask(id, update, a), errorCode("CONFIRM_NEW_ROUND"));
+  assert.deepEqual(await detail(id), before);
+  await commandTask(id, { ...update, confirmNewRound: true }, a);
+  const after = await detail(id);
+  const [next, old] = after.rounds;
+  assert.equal(after.currentRound, 2);
+  assert.deepEqual([next.kind, next.delivery, next.outcome], ["assigned", "individual", null]);
+  assert.deepEqual(next.personalAssignments, update.personalAssignments);
+  assert.deepEqual([old.kind, old.delivery, old.outcome], ["announcement", "shared", "superseded"]);
+  assert.equal(old.id, oldRound.id);
+  assert.ok(old.endedAt);
+  assert.deepEqual(after.members.filter((p) => p.roundId === old.id), before.members);
+  assert.deepEqual(after.submissions, before.submissions);
+  await assert.rejects(commandTask(id, {
+    action: "review", roundId: old.id, submissionId: before.submissions[0].id,
+    decision: "approve", reason: "",
+  }, a), errorCode("STALE_SUBMISSION"));
+  await submit(id, c, "新个人成果");
+  await approve(id);
+  assert.equal((await detail(id)).status, "active");
+  await submit(id, b);
+  await approve(id);
+  assert.equal((await detail(id)).status, "completed");
+});
+
 test("并发领取最后一名额仅一次成功，重复领取不增人数", async () => {
   const t = await createTask(
     input({

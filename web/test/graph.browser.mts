@@ -40,7 +40,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!ready) throw new Error("隔离服务启动超时。");
-  browser = await chromium.launch({ channel: "msedge", headless: true });
+  browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge", headless: true });
   const a = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), b = await browser.newContext();
   await register(a, "合成发布甲", "v3-browser-a"); await register(b, "合成执行乙", "v3-browser-b");
   for (const [context, name, username] of [[a, "合成发布甲", "v3-browser-a"], [b, "合成执行乙", "v3-browser-b"]] as const) {
@@ -50,16 +50,20 @@ try {
       for (const from of ["/dashboard", "/tasks", "/groups"]) {
         await identityPage.goto(origin + from);
         if (width === 390) await identityPage.getByRole("button", { name: "打开账户菜单", exact: true }).click();
-        await identityPage.getByRole("navigation", { name: "主要导航", exact: true }).getByRole("link", { name: "注册情况", exact: true }).click();
-        await identityPage.waitForURL("**/registration");
-        await expect(identityPage.locator(".current-user strong")).toHaveText(name);
-        await expect(identityPage.locator(".current-user small")).toHaveText(username);
-        expect((await (await context.request.get(origin + "/api/auth/get-session")).json()).user.username).toBe(username);
+        const sidebar = identityPage.getByRole("navigation", { name: "主要导航", exact: true });
+        await expect(sidebar.getByRole("link", { name: "任务协作", exact: true })).toBeVisible();
+        await expect(sidebar.locator('a[href="/registration"], a[href="/graph"]')).toHaveCount(0);
+        await expect(identityPage.locator('.mobile-bottom-nav a[href="/registration"], .mobile-bottom-nav a[href="/graph"]')).toHaveCount(0);
       }
+      await identityPage.goto(origin + "/registration");
+      await expect(identityPage).toHaveURL(origin + "/registration");
+      await expect(identityPage.locator(".current-user strong")).toHaveText(name);
+      await expect(identityPage.locator(".current-user small")).toHaveText(username);
+      expect((await (await context.request.get(origin + "/api/auth/get-session")).json()).user.username).toBe(username);
     }
     await identityPage.close();
   }
-  checks.push("A/B独立会话、桌面/手机从总览/任务/小组点击注册情况均保持本人姓名学号和真实会话");
+  checks.push("桌面侧栏及手机菜单移除两个入口，直接访问注册情况仍按 A/B 独立会话显示");
   const options = await api(a, "/api/task-options");
   const bid = options.members.find((m: { name: string }) => m.name === "合成执行乙").id;
   const group = await api(a, "/api/groups", { name: "合成实验小组" });

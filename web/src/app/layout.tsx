@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppFeaturesProvider } from "@/components/app-shell";
 import { Analytics } from "@/components/analytics";
 
 export const metadata: Metadata = {
@@ -14,7 +13,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN" data-theme="neural" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
-      <body><AppFeaturesProvider graphAvailable={process.env.V3_GRAPH_ENABLED === "1"}>{children}</AppFeaturesProvider><Analytics /></body>
+      <body>{children}<Analytics /></body>
     </html>
   );
 }

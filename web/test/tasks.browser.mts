@@ -247,11 +247,11 @@ try {
   await a.waitForURL(/\/tasks\/\d+$/);
   const taskId = Number(a.url().split("/").pop());
   expect((await api(ca, `/api/tasks/${taskId}`)).rounds[0].deadline).toBe(`${chosenDate.replaceAll("/", "-")}T01:05:00.000Z`);
-  await a.getByRole("button", { name: "修改要求", exact: true }).click();
-  const editDeadline = a.getByRole("dialog", { name: "修改任务要求" }).locator(".task-deadline");
+  await a.getByRole("button", { name: "修改任务", exact: true }).click();
+  const editDeadline = a.getByRole("dialog", { name: "修改任务" }).locator(".task-deadline");
   await expect(editDeadline.getByRole("spinbutton", { name: /小时/ })).toHaveValue("09");
   await expect(editDeadline.getByRole("spinbutton", { name: /分钟/ })).toHaveValue("05");
-  await a.getByRole("dialog", { name: "修改任务要求" }).getByRole("button", { name: "关闭", exact: true }).click();
+  await a.getByRole("dialog", { name: "修改任务" }).getByRole("button", { name: "关闭", exact: true }).click();
   checks.push("新版日期快捷选择和时分输入真实保存北京时间，编辑回显一致");
   checks.push("桌面发布公告任务");
   await go(b, `/tasks/${taskId}`);
@@ -405,22 +405,22 @@ try {
   await mp.getByRole("button", { name: "发布任务", exact: true }).click();
   await mp.waitForURL(/\/tasks\/\d+$/);
   const mobileId = Number(mp.url().split("/").pop());
-  await mp.getByRole("button", { name: "修改要求" }).click();
-  await mp
-    .getByRole("dialog")
-    .filter({ has: mp.getByRole("heading", { name: "修改任务要求" }) })
-    .getByLabel("共同要求", { exact: true })
-    .fill("手机修改后的任务要求");
-  await mp.getByRole("button", { name: "保存要求" }).click();
-  await mp.getByRole("button", { name: "调整执行对象" }).click();
-  const mobileTargets = mp.getByRole("dialog", { name: "调整执行对象" });
-  await expect(mobileTargets.getByRole("textbox", { name: "执行乙的个人分工", exact: true })).toHaveValue("手机端填写的个人分工");
-  await mobileTargets.getByLabel("搜索成员姓名", { exact: true }).fill("丙");
-  await mobileTargets.getByRole("checkbox", { name: "执行丙", exact: true }).check();
-  await mobileTargets.getByRole("textbox", { name: "执行丙的个人分工", exact: true }).fill("调整执行对象时补写的分工");
-  await mp.getByRole("button", { name: "保存执行对象" }).click();
+  await mp.getByRole("button", { name: "修改任务", exact: true }).click();
+  const mobileEditor = mp.getByRole("dialog", { name: "修改任务", exact: true });
+  const mobileSave = mobileEditor.getByRole("button", { name: "保存任务", exact: true });
+  await expect(mobileSave).toBeInViewport({ ratio: 1 });
+  await mobileEditor.getByLabel("共同要求", { exact: true }).fill("手机修改后的任务要求");
+  await expect(mobileEditor.getByRole("textbox", { name: "执行乙的个人分工", exact: true })).toHaveValue("手机端填写的个人分工");
+  await mobileEditor.getByLabel("搜索成员姓名", { exact: true }).fill("丙");
+  await mobileEditor.getByRole("checkbox", { name: "执行丙", exact: true }).check();
+  await mobileEditor.getByRole("textbox", { name: "执行丙的个人分工", exact: true }).fill("修改任务时补写的分工");
+  await expect(mobileEditor.getByRole("heading", { name: "修改任务", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(mobileSave).toBeInViewport({ ratio: 1 });
+  await mobileEditor.screenshot({ path: path.join(output, "edit-task-390.png") });
+  await mobileSave.click();
   await expect(mp.locator(".task-roster-list > div")).toHaveCount(2);
-  await expect(mp.locator(".task-personal-read").getByText("调整执行对象时补写的分工", { exact: true })).toBeVisible();
+  await expect(mp.locator(".task-personal-read").getByText("修改任务时补写的分工", { exact: true })).toBeVisible();
+  await expect(mp.locator(".task-requirements > .task-markdown")).toContainText("手机修改后的任务要求");
   await mp.screenshot({
     path: path.join(output, "mobile-task.png"),
     fullPage: true,
@@ -430,7 +430,7 @@ try {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBeTruthy();
-  checks.push("390px单列填写分工，发布、修改要求、调整执行对象及无页面溢出");
+  checks.push("390px发布并在同一窗口修改共同要求、执行对象和个人分工，无页面溢出");
   const mb = await browser.newContext({
     viewport: { width: 390, height: 844 },
   });
@@ -786,12 +786,12 @@ try {
   await a.waitForURL(/\/tasks\/\d+$/);
   const previewTaskId = Number(a.url().split("/").pop());
   await expect(a.locator(".task-requirements .task-markdown").getByRole("heading", { name: "验收标题" })).toBeVisible();
-  await a.getByRole("button", { name: "修改要求", exact: true }).click();
-  const editor = a.getByRole("dialog", { name: "修改任务要求" });
+  await a.getByRole("button", { name: "修改任务", exact: true }).click();
+  const editor = a.getByRole("dialog", { name: "修改任务" });
   await editor.getByLabel("共同要求", { exact: true }).fill(markdown + "\n\n修改已保存");
   await editor.getByRole("button", { name: "预览", exact: true }).click();
   await expect(editor.getByText("修改已保存", { exact: true })).toBeVisible();
-  await editor.getByRole("button", { name: "保存要求", exact: true }).click();
+  await editor.getByRole("button", { name: "保存任务", exact: true }).click();
   await expect(editor).not.toBeVisible();
   for (const width of [1440, 390]) {
     await b.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
@@ -943,6 +943,49 @@ try {
   checks.push(
     "游客成员页面仍可看课表但没有工作模块，直接请求个人记录任务摘要及详情全部拒绝",
   );
+  const switchTask = await api(ca, "/api/tasks", {
+    title: "切换轮次验收任务", description: "原轮共同要求", kind: "announcement", delivery: "shared",
+    deadline: null, capacity: null, directIds: [], groupIds: [], fileIds: [],
+  });
+  await api(cb, `/api/tasks/${switchTask.id}`, { action: "claim" });
+  await go(b, `/tasks/${switchTask.id}`);
+  await b.getByLabel("成果说明", { exact: true }).fill("旧轮共同结果");
+  await b.getByRole("button", { name: "提交成果", exact: true }).click();
+  await expect(b.locator(".task-submission")).toHaveCount(1);
+  await a.setViewportSize({ width: 1440, height: 1000 });
+  await go(a, `/tasks/${switchTask.id}`);
+  await a.getByRole("button", { name: "验收通过", exact: true }).click();
+  await expect(a.locator(".task-submission")).toContainText("已通过");
+  await a.getByRole("button", { name: "修改任务", exact: true }).click();
+  await expect(editor.getByText(/本人未提交附件/)).toHaveCount(0);
+  await editor.getByRole("combobox", { name: "任务类型", exact: true }).click();
+  await a.getByRole("option", { name: "指定任务 · 直接安排", exact: true }).click();
+  await editor.getByRole("combobox", { name: "交付模式", exact: true }).click();
+  await a.getByRole("option", { name: "每人分别交付", exact: true }).click();
+  await expect(editor.getByRole("checkbox", { name: "执行乙", exact: true })).toBeChecked();
+  const nextAssignment = editor.getByRole("textbox", { name: "执行乙的个人分工", exact: true });
+  await nextAssignment.fill("新轮按个人分工完成");
+  await expect(editor.getByRole("heading", { name: "修改任务", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(editor.getByRole("button", { name: "保存任务", exact: true })).toBeInViewport({ ratio: 1 });
+  await editor.screenshot({ path: path.join(output, "edit-task-1440.png") });
+  await editor.getByRole("button", { name: "保存任务", exact: true }).click();
+  const confirmRound = a.getByRole("dialog", { name: "开启新一轮", exact: true });
+  await expect(confirmRound.getByRole("button", { name: "取消", exact: true })).toBeFocused();
+  await confirmRound.getByRole("button", { name: "取消", exact: true }).press("Escape");
+  await expect(confirmRound).not.toBeVisible();
+  await expect(nextAssignment).toHaveValue("新轮按个人分工完成");
+  await editor.getByRole("button", { name: "保存任务", exact: true }).click();
+  await confirmRound.getByRole("button", { name: "确认开启新一轮", exact: true }).click();
+  await expect(editor).not.toBeVisible();
+  await expect(a.getByRole("combobox", { name: "查看轮次" })).toHaveText("第2轮 · 当前");
+  await expect(a.locator(".task-personal-read")).toContainText("新轮按个人分工完成");
+  await expect(a.locator(".task-submission")).toHaveCount(0);
+  await a.getByRole("combobox", { name: "查看轮次" }).click();
+  await a.getByRole("option", { name: "第1轮 · 历史", exact: true }).click();
+  await expect(a.locator(".page-header")).toContainText("共同交付一份成果");
+  await expect(a.locator(".task-submission")).toContainText("旧轮共同结果");
+  await expect(a.locator(".task-submission")).toContainText("已通过");
+  checks.push("1440px编辑可切换任务类型和交付模式，取消确认保留表单，确认后旧轮成果及验收可查");
   expect(browserErrors).toEqual([]);
   // Stop writes, produce and restore a real PostgreSQL dump plus filesystem archive into isolated targets.
   server.kill();
@@ -1045,8 +1088,8 @@ try {
   });
   const counts =
     await restored`select (select count(*) from collab_tasks)::int as tasks,(select count(*) from task_rounds)::int as rounds,(select count(*) from task_submissions)::int as submissions,(select count(*) from task_notifications)::int as notifications,(select count(*) from member_work_records)::int as work_records`;
-  expect(counts[0].tasks).toBe(6);
-  expect(counts[0].rounds).toBe(10);
+  expect(counts[0].tasks).toBe(7);
+  expect(counts[0].rounds).toBe(12);
   expect(counts[0].submissions).toBeGreaterThan(0);
   expect(counts[0].notifications).toBeGreaterThan(0);
   expect(counts[0].work_records).toBe(54);

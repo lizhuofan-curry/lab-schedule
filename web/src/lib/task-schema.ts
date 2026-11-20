@@ -1,10 +1,13 @@
 import { z } from "zod";
 
 const id = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const maxCapacity = 1000;
+const uniqueIds = (values: number[]) => new Set(values).size === values.length;
+const repeatedTargets = "请勿重复选择成员或小组。";
 const ids = z
   .array(id)
   .max(200)
-  .refine((a) => new Set(a).size === a.length, "请勿重复选择成员或小组。");
+  .refine(uniqueIds, repeatedTargets);
 const fileIds = z
   .array(z.string().uuid())
   .max(5, "最多上传5个附件。")
@@ -32,18 +35,19 @@ const content = {
     .max(120, "标题最多120字。"),
   description: z.string().trim().min(1, "请填写任务要求。").max(20000),
   deadline,
-  capacity: z.number().int().min(1).max(1000).nullable(),
+  capacity: z.number().int().min(1).max(maxCapacity).nullable(),
   fileIds,
 };
+const configuration = {
+  ...content,
+  kind: z.enum(["announcement", "assigned"]),
+  delivery: z.enum(["shared", "individual"]),
+  directIds: ids,
+  groupIds: ids,
+  personalAssignments,
+};
 export const taskCreateSchema = z
-  .object({
-    ...content,
-    kind: z.enum(["announcement", "assigned"]),
-    delivery: z.enum(["shared", "individual"]),
-    directIds: ids,
-    groupIds: ids,
-    personalAssignments,
-  })
+  .object(configuration)
   .strict()
   .refine(
     (v) => v.kind !== "announcement" || v.groupIds.length === 0,
@@ -60,6 +64,14 @@ export const taskCreateSchema = z
 const revision = { expectedRevision: id };
 export const taskCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("edit"), ...revision, ...content }).strict(),
+  z.object({
+    action: z.literal("update"),
+    ...revision,
+    ...configuration,
+    // The editor receives the active roster, which can include up to a full announcement's claimants.
+    directIds: z.array(id).max(maxCapacity).refine(uniqueIds, repeatedTargets),
+    confirmNewRound: z.literal(true).optional(),
+  }).strict(),
   z
     .object({
       action: z.literal("targets"),

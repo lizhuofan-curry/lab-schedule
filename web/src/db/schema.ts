@@ -270,6 +270,8 @@ export const taskRounds = pgTable(
       .notNull()
       .references(() => collabTasks.id, { onDelete: "cascade" }),
     number: integer("number").notNull(),
+    kind: text("kind").$type<"announcement" | "assigned">(),
+    delivery: text("delivery").$type<"shared" | "individual">(),
     title: text("title").notNull(),
     description: text("description").notNull(),
     personalAssignments: jsonb("personal_assignments")
@@ -300,8 +302,10 @@ export const taskRounds = pgTable(
     ),
     check(
       "round_outcome_check",
-      sql`${t.outcome} is null or ${t.outcome} in ('completed','cancelled')`,
+      sql`${t.outcome} is null or ${t.outcome} in ('completed','cancelled','superseded')`,
     ),
+    check("round_kind_check", sql`${t.kind} in ('announcement','assigned')`),
+    check("round_delivery_check", sql`${t.delivery} in ('shared','individual')`),
     check("round_personal_assignments_array", sql`jsonb_typeof(${t.personalAssignments}) = 'array'`),
   ],
 );

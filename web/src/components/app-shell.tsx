@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, Clock3, ClipboardList, LayoutDashboard, LogOut, Menu, Network, UserRoundCheck, Users, UsersRound, X } from "lucide-react";
-import { createContext, useContext, useState } from "react";
+import { CalendarDays, Clock3, ClipboardList, LayoutDashboard, LogOut, Menu, Users, UsersRound, X } from "lucide-react";
+import { useState } from "react";
 import { BciLogo } from "@/components/bci-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { signOut } from "@/lib/auth-client";
@@ -16,24 +16,13 @@ const navigation = [
   { href: "/members", label: "实验室成员", icon: Users },
   { href: "/groups", label: "项目小组", icon: UsersRound },
   { href: "/tasks", label: "任务协作", icon: ClipboardList },
-  { href: "/graph", label: "工作关系图", icon: Network },
-  { href: "/registration", label: "注册情况", icon: UserRoundCheck },
 ];
-
-const GraphFeature = createContext(false);
-export function AppFeaturesProvider({ graphAvailable, children }: { graphAvailable: boolean; children: React.ReactNode }) {
-  return <GraphFeature.Provider value={graphAvailable}>{children}</GraphFeature.Provider>;
-}
-export function useGraphAvailable() { return useContext(GraphFeature); }
 
 export function AppShell({ children, currentUser, guest = false }: { children: React.ReactNode; currentUser: { name: string; studentNo: string }; guest?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const graphAvailable = useGraphAvailable();
-  const enabledNavigation = navigation.filter((item) => item.href !== "/graph" || (graphAvailable && !guest));
-  const visibleNavigation = guest ? enabledNavigation.filter((item) => item.href !== "/my-schedule" && item.href !== "/registration") : enabledNavigation;
-  const mobileNavigation = visibleNavigation.filter((item) => item.href !== "/registration");
+  const visibleNavigation = guest ? navigation.filter((item) => item.href !== "/my-schedule") : navigation;
 
   async function exit() {
     if (guest) await fetch("/api/guest-session", { method: "DELETE" });
@@ -87,7 +76,7 @@ export function AppShell({ children, currentUser, guest = false }: { children: R
       {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="关闭导航" />}
       <main className="main-content">{children}</main>
       <nav className={`mobile-bottom-nav ${guest ? "guest-nav" : ""}`} aria-label="手机端主要导航">
-        {mobileNavigation.map(({ href, label, icon: Icon }) => {
+        {visibleNavigation.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href === "/tasks" && pathname.startsWith("/tasks/"));
           return (
             <Link key={href} href={href} data-analytics-event={`nav_${href.slice(1)}`} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>

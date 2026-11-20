@@ -117,13 +117,15 @@
 
 ## 9. 任务、附件与消息读取
 
-GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/tasks/:id：仅成员，返回轮次、参与人、成果、业务历史。POST /api/tasks：成员发布，身份来自会话。POST /api/tasks/:id：统一Zod命令，action为edit/targets/claim/close/cancel/reopen/submit/review；管理命令校验发布者，提交校验执行成员，逐人成果只能本人提交。
+GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/tasks/:id：仅成员，返回轮次、参与人、成果、业务历史。POST /api/tasks：成员发布，身份来自会话。POST /api/tasks/:id：统一Zod命令，action为update/edit/targets/claim/close/cancel/reopen/submit/review；管理命令校验发布者，提交校验执行成员，逐人成果只能本人提交。
 
 游客列表白名单明确为id/title/publisher/deadline/status/kind；仅新增kind分类标识（announcement或assigned），供公开/指定分区及历史类型标签，仍无详情、执行人或内部身份字段。列表API保留各状态数据，页面默认仅展示active，上下分区；已完成及已撤销单独筛选，不删除历史。
 
-edit/targets/close/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。类型/交付模式不可编辑，打回原因必填。
+update/edit/targets/close/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。打回原因必填。
 
-任务轮次包含 `personalAssignments`，每项为 `{studentId, description}`。发布及 `targets` 可提交此字段，个人分工去除首尾空白后为 1～20000 字，成员 ID 唯一，且必须符合当次分工范围。`targets` 省略字段时沿用仍有效的分工，传 `[]` 时清空。调整仍需发布者身份及匹配的修订号，分工变更随任务业务历史读取。`GET /api/task-options` 的同名成员选项附 `studentNoSuffix`（学号末四位），其他选项为 `null`。
+`update` 按发布者、任务状态、修订号和目标名单校验，接收标题、共同要求、类型、交付方式、截止时间、人数上限、附件、目标与个人分工，整次保存使用同一事务。切换类型或交付方式且有本轮提交时，需要 `confirmNewRound:true`，否则返回 `CONFIRM_NEW_ROUND`（409）。确认后旧轮 `outcome` 为 `superseded`，新轮从空成果开始。任务详情各轮返回有效 `kind` 和 `delivery`，列表使用当前轮配置。
+
+任务轮次包含 `personalAssignments`，每项为 `{studentId, description}`。发布、`update` 及 `targets` 可提交此字段，个人分工去除首尾空白后为 1～20000 字，成员 ID 唯一，且必须符合当次分工范围。`targets` 省略字段时沿用仍有效的分工，传 `[]` 时清空。调整仍需发布者身份及匹配的修订号，分工变更随任务业务历史读取。`GET /api/task-options` 的同名成员选项附 `studentNoSuffix`（学号末四位），其他选项为 `null`。
 
 POST /api/task-files：成员multipart单文件上传，单文件10MiB、允许扩展名及内容签名验证。GET /api/task-files/:id：成员下载已关联文件；未关联仅上传者可访问，禁止游客，下载禁缓存且nosniff。POST写入校验Origin，JSON请求限256KiB，multipart限11MiB。附件不提供公开URL。
 
