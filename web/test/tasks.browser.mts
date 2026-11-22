@@ -1,6 +1,7 @@
 import { chromium, expect } from "@playwright/test";
 import type { Page, BrowserContext } from "@playwright/test";
 import { loadEnvFile } from "node:process";
+import { randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -42,7 +43,7 @@ const env = {
   DATABASE_URL: databaseUrl,
   BETTER_AUTH_URL: origin,
   BETTER_AUTH_TRUSTED_ORIGINS: origin,
-  BETTER_AUTH_SECRET: "isolated-v2-browser-test-secret-20261008",
+  BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
   AUTH_DISABLE_RATE_LIMIT: "1",
   TASK_UPLOAD_DIR: uploads,
   NEXT_DIST_DIR: process.env.NEXT_DIST_DIR || ".next-v2-prod",
@@ -91,6 +92,7 @@ async function api(context: BrowserContext, url: string, data?: unknown) {
   return (await response.json()).data;
 }
 async function register(context: BrowserContext, name: string, no: string) {
+  const registrationPassword = randomUUID();
   const page = await context.newPage();
   page.on("pageerror", (e) => browserErrors.push(e.message));
   await page.goto(`${origin}/register`);
@@ -98,10 +100,10 @@ async function register(context: BrowserContext, name: string, no: string) {
   await page.getByLabel("学号", { exact: true }).fill(no);
   await page
     .getByLabel("设置密码", { exact: true })
-    .fill("browser-test-password-123");
+    .fill(registrationPassword);
   await page
     .getByLabel("确认密码", { exact: true })
-    .fill("browser-test-password-123");
+    .fill(registrationPassword);
   await page.getByRole("button", { name: "完成注册" }).click();
   await page.waitForURL("**/dashboard");
   return page;
@@ -854,12 +856,54 @@ try {
   checks.push("资料预览失败在窗口内提示、保留下载且Esc关闭可用");
   const assignedResponse = await ca.request.post(`${origin}/api/tasks`, { headers: { origin }, data: { title: "指定分区验收", description: "普通文字\n第二行", kind: "assigned", delivery: "shared", deadline: null, capacity: null, directIds: [bid], groupIds: [], fileIds: [] } });
   expect(assignedResponse.status()).toBe(201);
-  const mixedRows = await api(ca, "/api/tasks");
   async function chooseStatus(page: Page, label: string) {
-    await page.getByRole("combobox", { name: "任务状态" }).click();
-    await expect(page.getByRole("option", { name: "全部状态", exact: true })).toHaveCount(0);
-    await page.getByRole("option", { name: label, exact: true }).click();
+    const filters = page.getByRole("group", { name: "任务状态" });
+    const button = filters.getByRole("button", { name: label, exact: true });
+    await expect(filters.getByRole("button")).toHaveCount(3);
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
   }
+  for (const width of [1440, 390]) {
+    await a.setViewportSize({ width, height: 844 });
+    const title = `线下完成验收 ${width}`;
+    const { id } = await api(ca, "/api/tasks", {
+      title,
+      description: "线下交付",
+      kind: "assigned",
+      delivery: "shared",
+      deadline: null,
+      capacity: null,
+      directIds: [bid],
+      groupIds: [],
+      fileIds: [],
+    });
+    await go(b, `/tasks/${id}`);
+    await expect(b.getByRole("button", { name: "标记完成", exact: true })).toHaveCount(0);
+    await go(a, "/tasks");
+    await a.getByRole("link", { name: title, exact: true }).click();
+    const markComplete = a.getByRole("button", { name: "标记完成", exact: true });
+    await markComplete.click();
+    const confirmation = a.getByRole("dialog", { name: "标记任务完成" });
+    const cancel = confirmation.getByRole("button", { name: "取消", exact: true });
+    await expect(cancel).toBeFocused();
+    await cancel.click();
+    await waitTask(a, "进行中");
+    await markComplete.click();
+    await confirmation.getByRole("button", { name: "确认完成", exact: true }).click();
+    await waitTask(a, "已完成");
+    await a.getByRole("link", { name: "任务列表", exact: true }).click();
+    const taskLink = a.getByRole("link", { name: title, exact: true });
+    await expect(a.getByRole("group", { name: "任务状态" }).getByRole("button", { name: "进行中" })).toHaveAttribute("aria-pressed", "true");
+    await expect(taskLink).toHaveCount(0);
+    await chooseStatus(a, "已完成");
+    await taskLink.click();
+    await waitTask(a, "已完成");
+    await expect(a.getByText("发布者标记完成", { exact: true })).toBeVisible();
+    await expect(a.getByText("本轮无站内成果。", { exact: true })).toBeVisible();
+  }
+  await a.setViewportSize({ width: 1440, height: 1000 });
+  checks.push("桌面及手机：仅发布者可确认线下完成，任务进入已完成且详情历史可查");
+  const mixedRows = await api(ca, "/api/tasks");
   await go(a, "/tasks");
   await expect(a.getByRole("region", { name: "公开任务", exact: true }).getByText("公开资料预览验收", { exact: true })).toBeVisible();
   await expect(a.getByRole("region", { name: "指定任务", exact: true }).getByText("指定分区验收", { exact: true })).toBeVisible();
@@ -1088,8 +1132,8 @@ try {
   });
   const counts =
     await restored`select (select count(*) from collab_tasks)::int as tasks,(select count(*) from task_rounds)::int as rounds,(select count(*) from task_submissions)::int as submissions,(select count(*) from task_notifications)::int as notifications,(select count(*) from member_work_records)::int as work_records`;
-  expect(counts[0].tasks).toBe(7);
-  expect(counts[0].rounds).toBe(12);
+  expect(counts[0].tasks).toBe(9);
+  expect(counts[0].rounds).toBe(14);
   expect(counts[0].submissions).toBeGreaterThan(0);
   expect(counts[0].notifications).toBeGreaterThan(0);
   expect(counts[0].work_records).toBe(54);

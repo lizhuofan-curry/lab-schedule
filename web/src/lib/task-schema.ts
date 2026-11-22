@@ -84,6 +84,7 @@ export const taskCommandSchema = z.discriminatedUnion("action", [
     .strict(),
   z.object({ action: z.literal("claim") }).strict(),
   z.object({ action: z.literal("close"), ...revision }).strict(),
+  z.object({ action: z.literal("complete"), ...revision, confirm: z.literal(true) }).strict(),
   z.object({ action: z.literal("cancel"), ...revision }).strict(),
   z
     .object({

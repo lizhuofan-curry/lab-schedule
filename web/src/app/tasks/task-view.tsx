@@ -747,7 +747,7 @@ export function TaskListView({
   const [items, setItems] = useState(initial);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState<ListItem["status"]>("active");
   const [error, setError] = useState("");
   const shown = items.filter(
     (t) =>
@@ -782,6 +782,19 @@ export function TaskListView({
           )
         }
       />
+      <div className="segmented task-status-filter" role="group" aria-label="任务状态">
+        {(["active", "completed", "cancelled"] as const).map((value) => (
+          <button
+            type="button"
+            key={value}
+            className={status === value ? "active" : undefined}
+            aria-pressed={status === value}
+            onClick={() => setStatus(value)}
+          >
+            {taskStatusLabels[value]}
+          </button>
+        ))}
+      </div>
       <div className="task-toolbar">
         <label className="task-search">
           <span className="sr-only">搜索任务</span>
@@ -794,7 +807,6 @@ export function TaskListView({
         {!guest && (
           <SelectControl label="任务范围" value={filter} onChange={setFilter} options={[{ value: "all", label: "全部任务" }, { value: "mine", label: "我发布的" }, { value: "executing", label: "我执行的" }]} />
         )}
-        <SelectControl label="任务状态" value={status} onChange={setStatus} options={[{ value: "active", label: "进行中" }, { value: "completed", label: "已完成" }, { value: "cancelled", label: "已撤销" }]} />
         <button className="button secondary" onClick={() => void refresh()}>
           刷新
         </button>
@@ -804,7 +816,7 @@ export function TaskListView({
           {error}
         </p>
       )}
-      {(status === "active" ? [{ kind: "announcement", title: "公开任务" }, { kind: "assigned", title: "指定任务" }] : [{ kind: "all", title: taskStatusLabels[status as keyof typeof taskStatusLabels] }]).map((section) => {
+      {(status === "active" ? [{ kind: "announcement", title: "公开任务" }, { kind: "assigned", title: "指定任务" }] : [{ kind: "all", title: taskStatusLabels[status] }]).map((section) => {
         const sectionItems = section.kind === "all" ? shown : shown.filter((t) => t.kind === section.kind);
         return <section className="task-list-section" key={section.kind} aria-label={section.title}>
         <header><h2>{section.title}</h2><span>{sectionItems.length} 个任务</span></header>
@@ -936,6 +948,7 @@ const actionLabels: Record<string, string> = {
   approved: "验收通过",
   returned: "打回成果",
   completed: "任务完成",
+  completed_manually: "发布者标记完成",
   cancelled: "撤销任务",
   reopened: "重新开启",
   superseded: "本轮已结束",
@@ -955,7 +968,7 @@ export function TaskDetailView({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState<
-    "edit" | "reopen" | "cancel" | null
+    "edit" | "reopen" | "complete" | "cancel" | null
   >(null);
   const [selectedRound, setSelectedRound] = useState(initial.currentRound);
   const r = data.rounds.find((r) => r.number === selectedRound)!;
@@ -1009,7 +1022,7 @@ export function TaskDetailView({
       setData(next);
       setSelectedRound(next.currentRound);
       setModal(null);
-      setNotice("操作已完成。");
+      setNotice(body.action === "complete" ? "任务已移至「已完成」。" : "操作已完成。");
       window.dispatchEvent(new Event("task-notifications-changed"));
     } catch (e) {
       setError((e as Error).message);
@@ -1101,6 +1114,16 @@ export function TaskDetailView({
                   </button>
                 )}
                 <button
+                  className="button secondary"
+                  disabled={busy || !active.length}
+                  onClick={() => {
+                    setError("");
+                    setModal("complete");
+                  }}
+                >
+                  标记完成
+                </button>
+                <button
                   className="button danger"
                   disabled={busy}
                   onClick={() => setModal("cancel")}
@@ -1178,7 +1201,9 @@ export function TaskDetailView({
               );
             })}
           </div>
-          {!active.length && <p>暂无执行成员，发布者需安排人员或撤销。</p>}
+          {!active.length && (
+            <p>{ongoing ? "暂无执行成员，发布者可安排人员或撤销任务。" : "本轮无执行成员。"}</p>
+          )}
           {r.groupIds.length > 0 && (
             <p className="task-muted">
               目标小组：
@@ -1227,7 +1252,7 @@ export function TaskDetailView({
           <p className="task-muted">
             {delivery === "shared"
               ? "任意执行成员可提交共同成果，重提会生成新版，请先确认当前版本。"
-              : "提交你自己的成果，所有当前执行成员分别验收通过后才能完成。"}
+              : "提交你自己的成果，所有当前执行成员分别验收通过后，系统会自动判断任务是否完成。"}
           </p>
           {ownLatest?.feedback && (
             <p className="task-return-reason">打回原因：{ownLatest.feedback}</p>
@@ -1256,7 +1281,7 @@ export function TaskDetailView({
         </div>
         {!submissions.length && (
           <p className="task-muted">
-            还没有成果；执行成员可填写汇报、链接或上传文件。
+            {ongoing ? "还没有成果；执行成员可填写汇报、链接或上传文件。" : "本轮无站内成果。"}
           </p>
         )}
         {submissions.map((s) => {
@@ -1373,6 +1398,17 @@ export function TaskDetailView({
             }
           />
         </TaskModal>
+      )}
+      {modal === "complete" && (
+        <ConfirmationDialog
+          title="标记任务完成"
+          description="确认后，本轮停止领取、提交和验收。未提交的成员无需补交，已有成果及其验收状态保留。任务可在「已完成」中查看。"
+          confirmLabel="确认完成"
+          busy={busy}
+          error={error}
+          onClose={() => { setModal(null); setError(""); }}
+          onConfirm={() => run({ action: "complete", expectedRevision: data.revision, confirm: true })}
+        />
       )}
       {modal === "cancel" && (
         <ConfirmationDialog title="撤销任务" description="撤销后停止领取、提交和验收，任务与成果历史保留。之后可以重新开启。"

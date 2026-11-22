@@ -328,6 +328,31 @@ async function reconcile(
   }
   if (removed.length || added.length) await completeIfReady(tx, task, round);
 }
+async function completeRound(
+  tx: TaskTx,
+  task: Task,
+  round: Round,
+  active: Participant[],
+  actor: CurrentMember | null,
+) {
+  const completedAt = new Date();
+  await tx
+    .update(collabTasks)
+    .set({ status: "completed", revision: task.revision + 1, updatedAt: completedAt })
+    .where(eq(collabTasks.id, task.id));
+  await tx
+    .update(taskRounds)
+    .set({ claimsOpen: false, outcome: "completed", endedAt: completedAt })
+    .where(eq(taskRounds.id, round.id));
+  await event(tx, task, round, actor, actor ? "completed_manually" : "completed");
+  await notify(
+    tx,
+    task,
+    round,
+    [task.publisherId, ...active.map((p) => p.studentId)],
+    actor ? "发布者已将本轮任务标记为完成。" : "本轮任务已完成，所有所需成果已通过验收。",
+  );
+}
 async function completeIfReady(tx: TaskTx, task: Task, round: Round) {
   if (task.status !== "active") return;
   const active = (await participants(tx, round.id)).filter((p) => p.active);
@@ -352,28 +377,7 @@ async function completeIfReady(tx: TaskTx, task: Task, round: Round) {
       active.map((p) => taskSubject(task.delivery, p.studentId, p.generation)),
       approved,
     )
-  ) {
-    await tx
-      .update(collabTasks)
-      .set({
-        status: "completed",
-        revision: task.revision + 1,
-        updatedAt: new Date(),
-      })
-      .where(eq(collabTasks.id, task.id));
-    await tx
-      .update(taskRounds)
-      .set({ outcome: "completed", endedAt: new Date() })
-      .where(eq(taskRounds.id, round.id));
-    await event(tx, task, round, null, "completed");
-    await notify(
-      tx,
-      task,
-      round,
-      [task.publisherId, ...active.map((p) => p.studentId)],
-      "本轮任务已完成，所有所需成果已通过验收。",
-    );
-  }
+  ) await completeRound(tx, task, round, active, null);
 }
 export async function syncActiveTasks(
   tx: TaskTx,
@@ -961,6 +965,11 @@ export async function commandTask(
         .set({ claimsOpen: false })
         .where(eq(taskRounds.id, round.id));
       await event(tx, task, round, actor, "claims_closed");
+    } else if (command.action === "complete") {
+      if (!active.length)
+        fail("NO_EXECUTORS", "本轮暂无执行成员，请先安排人员。", 409);
+      await completeRound(tx, task, round, active, actor);
+      return { id };
     } else if (command.action === "cancel") {
       await tx
         .update(collabTasks)

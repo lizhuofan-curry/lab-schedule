@@ -989,6 +989,8 @@ html[data-theme="night"] .leader-chip { background: #3a3324; color: #f0cc73; }
 .task-toolbar input, .task-toolbar select, .task-round-toolbar select, .task-form input:not([type=checkbox]), .task-form textarea, .task-form select, .task-review textarea { width: 100%; border: 1px solid var(--line-dark); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 11px 13px; min-height: 46px; }
 .task-toolbar select, .task-round-toolbar select { width: auto; }
 .task-search { flex: 1; min-width: 190px; }
+.task-status-filter { width: min(100%, 320px); margin-bottom: 14px; }
+.task-status-filter button { flex: 1; min-height: 40px; padding: 0 8px; font-size: 14px; }
 .task-list { overflow: hidden; }
 .task-row { display: flex; align-items: center; gap: 18px; padding: 24px 26px; border-bottom: 1px solid var(--line); }
 .task-row:last-child { border: 0; }

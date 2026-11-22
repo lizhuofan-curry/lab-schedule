@@ -117,11 +117,13 @@
 
 ## 9. 任务、附件与消息读取
 
-GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/tasks/:id：仅成员，返回轮次、参与人、成果、业务历史。POST /api/tasks：成员发布，身份来自会话。POST /api/tasks/:id：统一Zod命令，action为update/edit/targets/claim/close/cancel/reopen/submit/review；管理命令校验发布者，提交校验执行成员，逐人成果只能本人提交。
+GET /api/tasks：成员或游客，游客严格白名单列表字段；GET /api/tasks/:id：仅成员，返回轮次、参与人、成果、业务历史。POST /api/tasks：成员发布，身份来自会话。POST /api/tasks/:id：统一Zod命令，action为update/edit/targets/claim/close/complete/cancel/reopen/submit/review；管理命令校验发布者，提交校验执行成员，逐人成果只能本人提交。
 
 游客列表白名单明确为id/title/publisher/deadline/status/kind；仅新增kind分类标识（announcement或assigned），供公开/指定分区及历史类型标签，仍无详情、执行人或内部身份字段。列表API保留各状态数据，页面默认仅展示active，上下分区；已完成及已撤销单独筛选，不删除历史。
 
-update/edit/targets/close/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。打回原因必填。
+update/edit/targets/close/complete/cancel/reopen携带expectedRevision；submit携带roundId、expectedVersion、requestKey；review携带roundId、submissionId、decision及reason。拒绝旧轮和旧版本，requestKey按轮和提交人防重复。打回原因必填。
+
+`complete` 须携带 `confirm:true`，仅发布者可结束进行中且有执行成员的当前轮次。任务和轮次同时置为 `completed`，停止领取并记录操作者及通知发布者和当前执行成员。成果及验收状态保持原样。空名单返回 `NO_EXECUTORS`（409），旧修订号返回 `STALE_REVISION`（409），已结束轮次返回 `TASK_CLOSED`（409）。
 
 `update` 按发布者、任务状态、修订号和目标名单校验，接收标题、共同要求、类型、交付方式、截止时间、人数上限、附件、目标与个人分工，整次保存使用同一事务。切换类型或交付方式且有本轮提交时，需要 `confirmNewRound:true`，否则返回 `CONFIRM_NEW_ROUND`（409）。确认后旧轮 `outcome` 为 `superseded`，新轮从空成果开始。任务详情各轮返回有效 `kind` 和 `delivery`，列表使用当前轮配置。
 

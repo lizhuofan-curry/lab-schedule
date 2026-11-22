@@ -8,6 +8,16 @@ import {
 } from "./task-rules.ts";
 import { MAX_TASK_FILE_BYTES, validateTaskFile, taskFilePreviewType } from "./task-file-rules.ts";
 import { taskCreateSchema, taskCommandSchema, notificationDeleteSchema } from "./task-schema.ts";
+test("标记完成须明确确认并携带有效的任务修订号", () => {
+  const command = { action: "complete", expectedRevision: 1, confirm: true };
+  assert.deepEqual(taskCommandSchema.parse(command), command);
+  for (const invalid of [
+    { action: "complete", expectedRevision: 1 },
+    { ...command, confirm: false },
+    { ...command, expectedRevision: 0 },
+    { ...command, studentId: 2 },
+  ]) assert.equal(taskCommandSchema.safeParse(invalid).success, false);
+});
 test("消息清理确认集合拒绝未确认、伪造接收人、重复及越界ID", () => {
   assert.deepEqual(notificationDeleteSchema.parse({ ids: [1, 2], confirm: true }).ids, [1, 2]);
   for (const body of [
